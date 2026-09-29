@@ -1,9 +1,0 @@
-C:\Sage50_Last\Sage50Serv\Librerias\sage.addons.S50APIRest.dll
-C:\Sage50_Last\Sage50Serv\Librerias\sage.addons.S50APIRest.pdb
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\S50APIRest.csproj.AssemblyReference.cache
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\sage.addons.S50APIRest.Visual.UserControls.S50APIRestConfig.resources
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\S50APIRest.csproj.GenerateResource.cache
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\S50APIRest.csproj.CoreCompileInputs.cache
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\S50APIRest.csproj.Up2Date
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\sage.addons.S50APIRest.dll
-C:\Sage50_Last\Sage50Serv\modulos\S50APIRest\S50APIRest\obj\Debug\sage.addons.S50APIRest.pdb
