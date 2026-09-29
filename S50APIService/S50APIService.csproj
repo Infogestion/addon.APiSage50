@@ -8,9 +8,14 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <RootNamespace>S50APIService</RootNamespace>
-    <!-- El proceso principal no carga Sage: las redirecciones de versión las aplica sage.50.exe.config dentro del AppDomain de Sage. -->
-    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
-    <MSBuildWarningsAsMessages>MSB3276</MSBuildWarningsAsMessages>
+    <!--
+      Las librerías de NuGet (JWT, System.Memory...) necesitan redirecciones de versión en S50APIService.exe.config.
+      Solo afectan al proceso principal: dentro del AppDomain de Sage se aplica sage.50.exe.config.
+      MSB3276/MSB3277 avisan de versiones distintas entre esas librerías y las de la carpeta de Sage: no se mezclan
+      en ejecución porque cada AppDomain carga las suyas.
+    -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <MSBuildWarningsAsMessages>MSB3276;MSB3277</MSBuildWarningsAsMessages>
     <!--
       Librerías de Sage contra las que se compila. En ejecución se usan las del terminal configurado en App.config.
       Se puede cambiar al compilar: dotnet build -p:SageLibs="C:\ruta\a\las\librerias"
@@ -20,6 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
   <ItemGroup>

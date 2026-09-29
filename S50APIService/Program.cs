@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using S50APIService.Http;
 using S50APIService.Sage;
+using S50APIService.Seguridad;
 
 namespace S50APIService
 {
@@ -23,8 +24,11 @@ namespace S50APIService
             string grupo = cfg["SageGrupo"];
             string empresa = cfg["SageEmpresa"];
             var timeout = TimeSpan.FromSeconds(int.Parse(cfg["SageTimeoutSegundos"]));
+            var jwt = new ServicioJwt(cfg["JwtClave"], TimeSpan.FromHours(int.Parse(cfg["JwtHorasValidez"])));
 
             Console.WriteLine($"S50APIService · terminal {terminal} · grupo {grupo} · empresa {empresa}");
+            if (jwt.ClaveTemporal)
+                Console.WriteLine("AVISO: no hay JwtClave en App.config; se usa una clave temporal y los tokens dejarán de valer al reiniciar.");
             using (var sesion = new SesionSage(terminal, cfg["SageLibrerias"]))
             {
                 // Si Sage no conecta, la API arranca igualmente y /api/salud informa del error.
@@ -42,7 +46,7 @@ namespace S50APIService
                     Console.WriteLine("ERROR al conectar con Sage: " + errorConexion);
                 }
 
-                using (var servidor = new ServidorHttp(url, sesion, () => errorConexion))
+                using (var servidor = new ServidorHttp(url, sesion, () => errorConexion, jwt))
                 using (var parar = new ManualResetEventSlim())
                 {
                     servidor.Iniciar();

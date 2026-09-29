@@ -49,6 +49,25 @@ namespace S50APIService.Sage
             });
         }
 
+        /// <summary>
+        /// Comprueba usuario y contraseña con las mismas reglas que la pantalla de login de Sage (frmLogin),
+        /// pero sin registrar la sesión: no se llama a _Entrar(), que ocupa puesto de licencia y puede mostrar diálogos.
+        /// </summary>
+        public bool ValidarUsuario(string codigo, string password)
+        {
+            return EnSage(() =>
+            {
+                if (string.IsNullOrWhiteSpace(codigo) || password == null)
+                    return false;
+                var usuario = new sage.ew.usuario.Usuario(codigo.Trim());
+                if (!usuario._Existe_Registro())
+                    return false;
+                if (usuario._Entrada && !usuario._IsSuperUser) // desactivado temporalmente desde Sage
+                    return false;
+                return usuario._Valida_Password(password);
+            });
+        }
+
         private static string Global(string variable) => Convert.ToString(EW_GLOBAL._GetVariable(variable)).Trim();
 
         /// <summary>
