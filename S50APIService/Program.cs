@@ -1,17 +1,19 @@
 using System;
 using System.Configuration;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Threading;
-using S50APIService.Http;
+using Microsoft.Owin.Hosting;
+using S50APIService.Api;
 using S50APIService.Sage;
 using S50APIService.Seguridad;
 
 namespace S50APIService
 {
     /// <summary>
-    /// API de Sage 50 sin interfaz gráfica. De momento se ejecuta como aplicación de consola (Ctrl+C para parar);
-    /// más adelante se instalará como servicio de Windows.
+    /// Réplica de interface.s50c que trabaja con las librerías de Sage 50, sin interfaz gráfica.
+    /// De momento se ejecuta como aplicación de consola (Ctrl+C para parar); más adelante se instalará como servicio de Windows.
     /// </summary>
     internal static class Program
     {
@@ -24,33 +26,38 @@ namespace S50APIService
             string grupo = cfg["SageGrupo"];
             string empresa = cfg["SageEmpresa"];
             var timeout = TimeSpan.FromSeconds(int.Parse(cfg["SageTimeoutSegundos"]));
-            var jwt = new ServicioJwt(cfg["JwtClave"], TimeSpan.FromHours(int.Parse(cfg["JwtHorasValidez"])));
+
+            Contexto.Jwt = new ServicioJwt(cfg["JwtClave"]);
+            Contexto.Usuarios = new UsuariosApi(cfg);
 
             Console.WriteLine($"S50APIService · terminal {terminal} · grupo {grupo} · empresa {empresa}");
-            if (jwt.ClaveTemporal)
-                Console.WriteLine("AVISO: no hay JwtClave en App.config; se usa una clave temporal y los tokens dejarán de valer al reiniciar.");
+            if (Contexto.Jwt.ClaveTemporal)
+                Console.WriteLine("AVISO: no hay JwtClave configurada; se usa una clave temporal y los tokens dejarán de valer al reiniciar.");
+            if (Contexto.Usuarios.Cantidad == 0)
+                Console.WriteLine("AVISO: no hay usuarios de la API configurados (ApiUsuario:...); POST /api/token siempre responderá 401.");
+
             using (var sesion = new SesionSage(terminal, cfg["SageLibrerias"]))
             {
-                // Si Sage no conecta, la API arranca igualmente y /api/salud informa del error.
-                string errorConexion = "";
+                Contexto.Sesion = sesion;
                 var sw = Stopwatch.StartNew();
                 try
                 {
                     Console.WriteLine($"Conectando con Sage ({sesion.CarpetaLibrerias})...");
                     sesion.Conectar(terminal, grupo, empresa, timeout);
-                    Console.WriteLine($"Sage conectado en {sw.Elapsed.TotalSeconds:0.0} s");
+                    var estado = sesion.Ejecutar(t => t.Estado(), timeout, "estado");
+                    Console.WriteLine($"Sage conectado en {sw.Elapsed.TotalSeconds:0.0} s · "
+                        + string.Join(" · ", estado.Select(kv => kv.Key + " " + kv.Value)));
                 }
                 catch (Exception ex)
                 {
-                    errorConexion = ex.Message;
-                    Console.WriteLine("ERROR al conectar con Sage: " + errorConexion);
+                    // La API arranca igualmente: las rutas que usen Sage fallarán hasta que se reinicie el servicio.
+                    Console.WriteLine("ERROR al conectar con Sage: " + ex.Message);
                 }
 
-                using (var servidor = new ServidorHttp(url, sesion, () => errorConexion, jwt))
+                using (WebApp.Start(url, Arranque.Configurar))
                 using (var parar = new ManualResetEventSlim())
                 {
-                    servidor.Iniciar();
-                    Console.WriteLine($"API escuchando en {url} (prueba: {url}api/salud). Ctrl+C para parar.");
+                    Console.WriteLine($"API escuchando en {url}. Ctrl+C para parar.");
                     Console.CancelKeyPress += (s, e) => { e.Cancel = true; parar.Set(); };
                     parar.Wait();
                 }

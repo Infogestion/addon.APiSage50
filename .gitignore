@@ -24,3 +24,6 @@ packages/
 *.cache
 *.log
 TestResults/
+
+# Valores secretos de S50APIService (clave JWT y usuarios de la API)
+S50APIService.secretos.config

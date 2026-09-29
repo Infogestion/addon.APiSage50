@@ -7,22 +7,30 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace S50APIService.Seguridad
 {
-    /// <summary>Genera y valida los tokens JWT de la API (HMAC-SHA256).</summary>
+    /// <summary>
+    /// Tokens JWT idénticos a los de interface.s50c (AuthenticationService.GenerateToken y la validación de JwtBearer):
+    /// HS256, emisor y audiencia de interface.s50c, claim unique_name y 24 horas de validez.
+    /// </summary>
     public sealed class ServicioJwt
     {
-        private const string Emisor = "S50APIService";
+        public const string Emisor = "interface.s50c.Auth.issuer";
+        public const string Audiencia = "interface.s50c.Auth.audience";
+        private static readonly TimeSpan Validez = TimeSpan.FromHours(24);
+
         private readonly SymmetricSecurityKey _clave;
-        private readonly TimeSpan _validez;
+        private readonly JwtSecurityTokenHandler _manejador = new JwtSecurityTokenHandler();
 
         /// <summary>True si la clave se ha generado al arrancar porque no había ninguna configurada.</summary>
         public bool ClaveTemporal { get; }
 
-        /// <param name="clave">Clave secreta (mínimo 32 caracteres). Vacía = se genera una aleatoria en cada arranque.</param>
-        public ServicioJwt(string clave, TimeSpan validez)
+        /// <param name="clave">
+        /// Clave secreta. Con la misma clave que interface.s50c, los tokens de una API valen en la otra (útil durante la migración).
+        /// Vacía = se genera una aleatoria en cada arranque.
+        /// </param>
+        public ServicioJwt(string clave)
         {
             if (string.IsNullOrWhiteSpace(clave))
             {
-                // Sin clave configurada no se usa ninguna fija en el código: los tokens dejan de valer al reiniciar.
                 var aleatoria = new byte[32];
                 using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(aleatoria);
                 _clave = new SymmetricSecurityKey(aleatoria);
@@ -30,55 +38,34 @@ namespace S50APIService.Seguridad
             }
             else
             {
-                if (clave.Length < 32)
-                    throw new ArgumentException("La clave JWT debe tener al menos 32 caracteres.");
                 _clave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(clave));
             }
-            _validez = validez;
         }
 
-        public string GenerarToken(string usuario, out DateTime expira)
+        public string GenerarToken(string usuario)
         {
-            expira = DateTime.UtcNow.Add(_validez);
-            var token = new JwtSecurityToken(
+            var cabecera = new JwtHeader(new SigningCredentials(_clave, SecurityAlgorithms.HmacSha256));
+            var datos = new JwtPayload(
                 issuer: Emisor,
-                audience: Emisor,
-                claims: new[]
-                {
-                    new Claim(ClaimTypes.Name, usuario),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                },
-                expires: expira,
-                signingCredentials: new SigningCredentials(_clave, SecurityAlgorithms.HmacSha256));
-            return new JwtSecurityTokenHandler().WriteToken(token);
+                audience: Audiencia,
+                claims: new[] { new Claim(JwtRegisteredClaimNames.UniqueName, usuario) },
+                notBefore: DateTime.Now,
+                expires: DateTime.Now.Add(Validez));
+            return _manejador.WriteToken(new JwtSecurityToken(cabecera, datos));
         }
 
-        /// <summary>Devuelve el usuario del token, o null si el token no es válido o ha caducado.</summary>
-        public string Validar(string token)
+        /// <summary>
+        /// Valida el token con los mismos parámetros que JwtBearer en interface.s50c (por defecto: firma, emisor,
+        /// audiencia y caducidad con 5 minutos de margen). Lanza la excepción de validación si no es válido.
+        /// </summary>
+        public ClaimsPrincipal Validar(string token)
         {
-            try
+            return _manejador.ValidateToken(token, new TokenValidationParameters
             {
-                var principal = new JwtSecurityTokenHandler().ValidateToken(token, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = _clave,
-                    ValidIssuer = Emisor,
-                    ValidAudience = Emisor,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.FromMinutes(1),
-                }, out _);
-                return principal.Identity?.Name;
-            }
-            // Solo los errores del token (firma, caducidad, formato...). Cualquier otro fallo, p. ej. que falte
-            // una DLL, debe verse como error 500 y no disfrazarse de "token no válido".
-            catch (SecurityTokenException)
-            {
-                return null;
-            }
-            catch (ArgumentException)
-            {
-                return null;
-            }
+                IssuerSigningKey = _clave,
+                ValidIssuer = Emisor,
+                ValidAudience = Audiencia,
+            }, out _);
         }
     }
 }
