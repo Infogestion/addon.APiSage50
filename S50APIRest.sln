@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "S50APIRest", "S50APIRest\S5
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "main", "main\main.csproj", "{035F95D8-8FF6-48FA-91FC-E39FE3F839BA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "S50APIService", "S50APIService\S50APIService.csproj", "{19BC6AC9-94CE-4469-A1C8-027C0827D5E5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{035F95D8-8FF6-48FA-91FC-E39FE3F839BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{035F95D8-8FF6-48FA-91FC-E39FE3F839BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{035F95D8-8FF6-48FA-91FC-E39FE3F839BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19BC6AC9-94CE-4469-A1C8-027C0827D5E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19BC6AC9-94CE-4469-A1C8-027C0827D5E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19BC6AC9-94CE-4469-A1C8-027C0827D5E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19BC6AC9-94CE-4469-A1C8-027C0827D5E5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

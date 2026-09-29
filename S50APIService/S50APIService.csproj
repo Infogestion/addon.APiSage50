@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <!-- Las librerías de Sage son AnyCPU y sage.50.exe se ejecuta en 64 bits: el servicio también. -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <RootNamespace>S50APIService</RootNamespace>
+    <!-- El proceso principal no carga Sage: las redirecciones de versión las aplica sage.50.exe.config dentro del AppDomain de Sage. -->
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <MSBuildWarningsAsMessages>MSB3276</MSBuildWarningsAsMessages>
+    <!--
+      Librerías de Sage contra las que se compila. En ejecución se usan las del terminal configurado en App.config.
+      Se puede cambiar al compilar: dotnet build -p:SageLibs="C:\ruta\a\las\librerias"
+    -->
+    <SageLibs Condition="'$(SageLibs)' == ''">D:\Sage50Tias\Sage50Term2\2026.3.20</SageLibs>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Data" />
+    <Reference Include="sage.50">
+      <HintPath>$(SageLibs)\sage.50.exe</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="sage.ew.db">
+      <HintPath>$(SageLibs)\sage.ew.db.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+</Project>
