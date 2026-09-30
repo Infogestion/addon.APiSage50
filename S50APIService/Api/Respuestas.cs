@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -29,17 +30,37 @@ namespace S50APIService.Api
             return Problema(HttpStatusCode.Unauthorized, "https://tools.ietf.org/html/rfc7235#section-3.1", "Unauthorized");
         }
 
-        private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo)
+        /// <summary>Ok(objeto) en ASP.NET Core: el objeto como application/json; charset=utf-8.</summary>
+        public static HttpResponseMessage Json(object valor)
+        {
+            var contenido = new StringContent(JsonConvert.SerializeObject(valor), new UTF8Encoding(false));
+            contenido.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
+        }
+
+        /// <summary>
+        /// El 400 automático de un [ApiController] cuando el modelo no es válido (ValidationProblemDetails):
+        /// <paramref name="errores"/> son los campos con sus mensajes, en el orden en que se muestran.
+        /// </summary>
+        public static HttpResponseMessage ErrorValidacion(IDictionary<string, string[]> errores)
+        {
+            return Problema(HttpStatusCode.BadRequest, "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+                "One or more validation errors occurred.", errores);
+        }
+
+        private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null)
         {
             // Mismo orden de propiedades que el ProblemDetails de ASP.NET Core 6.
-            string json = JsonConvert.SerializeObject(new
+            var problema = new Dictionary<string, object>
             {
-                type = tipo,
-                title = titulo,
-                status = (int)estado,
-                traceId = NuevoTraceId(),
-            });
-            var contenido = new StringContent(json, new UTF8Encoding(false));
+                ["type"] = tipo,
+                ["title"] = titulo,
+                ["status"] = (int)estado,
+                ["traceId"] = NuevoTraceId(),
+            };
+            if (errores != null)
+                problema["errors"] = errores;
+            var contenido = new StringContent(JsonConvert.SerializeObject(problema), new UTF8Encoding(false));
             contenido.Headers.ContentType = new MediaTypeHeaderValue("application/problem+json") { CharSet = "utf-8" };
             return new HttpResponseMessage(estado) { Content = contenido };
         }

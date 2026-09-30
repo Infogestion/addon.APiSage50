@@ -1,4 +1,5 @@
 using System.Web.Http;
+using System.Web.Http.ExceptionHandling;
 using Newtonsoft.Json.Serialization;
 using Owin;
 using S50APIService.Api.Autenticacion;
@@ -18,6 +19,7 @@ namespace S50APIService.Api
             config.Formatters.Remove(config.Formatters.XmlFormatter);
             config.Formatters.JsonFormatter.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
 
+            config.Services.Add(typeof(IExceptionLogger), new RegistroExcepciones());
             config.MessageHandlers.Add(new ManejadorErroresSinCuerpo());
             config.MessageHandlers.Add(new ManejadorJwt(Contexto.Jwt));
 

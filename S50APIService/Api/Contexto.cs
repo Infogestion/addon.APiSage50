@@ -9,5 +9,6 @@ namespace S50APIService.Api
         public static SesionSage Sesion { get; set; }
         public static ServicioJwt Jwt { get; set; }
         public static UsuariosApi Usuarios { get; set; }
+        public static UsuariosNadilux UsuariosNadilux { get; set; }
     }
 }

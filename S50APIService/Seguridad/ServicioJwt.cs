@@ -44,11 +44,22 @@ namespace S50APIService.Seguridad
 
         public string GenerarToken(string usuario)
         {
+            return Generar(new Claim(JwtRegisteredClaimNames.UniqueName, usuario));
+        }
+
+        /// <summary>Token de las apps de Nadilux (GenerateTokenNadiluxRepartos): claims "usrname" y "business" en vez de unique_name.</summary>
+        public string GenerarTokenNadilux(string usuario, string business)
+        {
+            return Generar(new Claim("usrname", usuario), new Claim("business", business));
+        }
+
+        private string Generar(params Claim[] claims)
+        {
             var cabecera = new JwtHeader(new SigningCredentials(_clave, SecurityAlgorithms.HmacSha256));
             var datos = new JwtPayload(
                 issuer: Emisor,
                 audience: Audiencia,
-                claims: new[] { new Claim(JwtRegisteredClaimNames.UniqueName, usuario) },
+                claims: claims,
                 notBefore: DateTime.Now,
                 expires: DateTime.Now.Add(Validez));
             return _manejador.WriteToken(new JwtSecurityToken(cabecera, datos));

@@ -39,6 +39,7 @@ namespace S50APIService
             using (var sesion = new SesionSage(terminal, cfg["SageLibrerias"]))
             {
                 Contexto.Sesion = sesion;
+                Contexto.UsuariosNadilux = new UsuariosNadilux(sesion, timeout);
                 var sw = Stopwatch.StartNew();
                 try
                 {

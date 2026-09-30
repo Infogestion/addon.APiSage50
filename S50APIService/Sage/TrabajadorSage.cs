@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Reflection;
 using sage._50;
 using sage.ew.db;
@@ -48,6 +49,33 @@ namespace S50APIService.Sage
                 ["versionSage"] = typeof(main_s50).Assembly.GetName().Version.ToString(),
             });
         }
+
+        /// <summary>
+        /// Todas las filas de una tabla, con las columnas pedidas como texto (null si la columna es NULL).
+        /// <paramref name="baseDatos"/> es el nombre lógico de Sage ("COMUNES", o el de un addon como "FERRETERIATIA"):
+        /// Sage lo traduce a la base de datos real del grupo de empresas conectado.
+        /// </summary>
+        public List<string[]> LeerTabla(string baseDatos, string tabla, string[] columnas)
+        {
+            return EnSage(() =>
+            {
+                string sql = "SELECT " + string.Join(", ", columnas) + " FROM " + DB.SQLDatabase(baseDatos, tabla);
+                var datos = new DataTable();
+                if (!DB.SQLExec(sql, ref datos))
+                    throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
+
+                var filas = new List<string[]>(datos.Rows.Count);
+                foreach (DataRow fila in datos.Rows)
+                {
+                    var valores = new string[columnas.Length];
+                    for (int i = 0; i < columnas.Length; i++)
+                        valores[i] = fila.IsNull(i) ? null : Convert.ToString(fila[i]);
+                    filas.Add(valores);
+                }
+                return filas;
+            });
+        }
+
 
         private static string Global(string variable) => Convert.ToString(EW_GLOBAL._GetVariable(variable)).Trim();
 
