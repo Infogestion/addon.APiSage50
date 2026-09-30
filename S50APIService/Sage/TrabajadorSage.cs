@@ -20,8 +20,7 @@ namespace S50APIService.Sage
 
         public TrabajadorSage()
         {
-            // Este ensamblado se cargó por ruta y el AppDomain de Sage busca por nombre en la carpeta de Sage:
-            // sin esto, las llamadas entre dominios no encontrarían este mismo ensamblado.
+            // Sin esto, las llamadas entre AppDomains no encuentran este ensamblado (se cargó por ruta, no desde la carpeta de Sage).
             var propio = typeof(TrabajadorSage).Assembly;
             AppDomain.CurrentDomain.AssemblyResolve += (s, e) => new AssemblyName(e.Name).Name == propio.GetName().Name ? propio : null;
         }
@@ -51,11 +50,12 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Todas las filas de una tabla, con las columnas pedidas como texto (null si la columna es NULL).
-        /// <paramref name="baseDatos"/> es el nombre lógico de Sage ("COMUNES", o el de un addon como "FERRETERIATIA"):
-        /// Sage lo traduce a la base de datos real del grupo de empresas conectado.
+        /// Todas las filas de una tabla, con las columnas pedidas en ese orden y con su tipo de .NET
+        /// (string, bool, decimal, DateTime...; null si la columna es NULL). Son tipos básicos, así que pasan sin problema
+        /// al resto del servicio. <paramref name="baseDatos"/> es el nombre lógico de Sage ("COMUNES", "2025", o el de un
+        /// addon como "FERRETERIATIA"): Sage lo traduce a la base de datos real del grupo de empresas conectado.
         /// </summary>
-        public List<string[]> LeerTabla(string baseDatos, string tabla, string[] columnas)
+        public List<object[]> LeerTabla(string baseDatos, string tabla, string[] columnas)
         {
             return EnSage(() =>
             {
@@ -64,12 +64,12 @@ namespace S50APIService.Sage
                 if (!DB.SQLExec(sql, ref datos))
                     throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
 
-                var filas = new List<string[]>(datos.Rows.Count);
+                var filas = new List<object[]>(datos.Rows.Count);
                 foreach (DataRow fila in datos.Rows)
                 {
-                    var valores = new string[columnas.Length];
+                    var valores = new object[columnas.Length];
                     for (int i = 0; i < columnas.Length; i++)
-                        valores[i] = fila.IsNull(i) ? null : Convert.ToString(fila[i]);
+                        valores[i] = fila.IsNull(i) ? null : fila[i];
                     filas.Add(valores);
                 }
                 return filas;

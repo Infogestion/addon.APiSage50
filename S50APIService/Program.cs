@@ -39,6 +39,7 @@ namespace S50APIService
             using (var sesion = new SesionSage(terminal, cfg["SageLibrerias"]))
             {
                 Contexto.Sesion = sesion;
+                Contexto.Lector = new LectorSage(sesion, timeout);
                 Contexto.UsuariosNadilux = new UsuariosNadilux(sesion, timeout);
                 var sw = Stopwatch.StartNew();
                 try
@@ -51,7 +52,6 @@ namespace S50APIService
                 }
                 catch (Exception ex)
                 {
-                    // La API arranca igualmente: las rutas que usen Sage fallarán hasta que se reinicie el servicio.
                     Console.WriteLine("ERROR al conectar con Sage: " + ex.Message);
                 }
 

@@ -29,18 +29,15 @@ namespace S50APIService.Api
             {
                 s.DocumentPath = RutaDocumento;
                 Generador(s.GeneratorSettings);
-                // Swashbuckle no incluye "servers" en el documento.
                 s.PostProcess = documento => documento.Servers.Clear();
             });
             app.UseSwaggerUi(typeof(Swagger).Assembly, s =>
             {
                 s.Path = "/swagger";
                 s.DocumentPath = RutaDocumento;
-                // El documento va dentro de la página (lista "urls"), como en Swashbuckle: así /swagger/index.html funciona
-                // sin "?url=..." en la dirección. El nombre es el que muestra interface.s50c (nombre de su aplicación + versión).
                 // Ruta absoluta: NSwag convierte una relativa ("v1/swagger.json") en "/v1/swagger.json", que no existe.
                 s.SwaggerRoutes.Add(new SwaggerUiRoute("interface.s50c.WebAPI v1", RutaDocumento));
-                s.DocExpansion = "none"; // endpoints contraídos, como en interface.s50c
+                s.DocExpansion = "none";
                 Generador(s.GeneratorSettings);
             });
         }
@@ -50,12 +47,16 @@ namespace S50APIService.Api
             g.Title = "interface.s50c";
             g.Version = "v1";
             string nl = Environment.NewLine;
-            // Mismo texto que la descripción de AddSwaggerGen en interface.s50c.
             g.Description = $"v{VersionApi}{TipoVersionApi}{nl}{nl}"
                 + $"Todas las llamadas, excepto 'POST/api/token', tienen Autorización mediante BearerToken siendo enviado en la cabecera HTTP de cada endpoint.{nl}\r\n"
                 + $"Para obtener dicho Token debe utilizar 'POST /api/token/{{username}}/{{password}}'.{nl}. Duración del token 24h.\r\n"
                 + $"https://datatracker.ietf.org/doc/html/rfc6750#section-2.1{nl}\r\n";
             g.DocumentProcessors.Add(new SeguridadBearer());
+            g.SchemaSettings = new NJsonSchema.Generation.SystemTextJsonSchemaGeneratorSettings
+            {
+                SchemaType = NJsonSchema.SchemaType.OpenApi3,
+                SerializerOptions = FormateadorJson.Opciones,
+            };
         }
 
         /// <summary>
@@ -90,7 +91,7 @@ namespace S50APIService.Api
             }
             else if (ruta.Equals("/swagger", StringComparison.OrdinalIgnoreCase))
             {
-                destino = ruta.Substring(1) + "/index.html"; // relativa y conservando mayúsculas, como Swashbuckle
+                destino = ruta.Substring(1) + "/index.html";
                 codigo = 301;
             }
             else if (ruta.Equals("/swagger/", StringComparison.OrdinalIgnoreCase))

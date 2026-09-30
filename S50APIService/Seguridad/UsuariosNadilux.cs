@@ -28,26 +28,26 @@ namespace S50APIService.Seguridad
             var conductores = _sesion.Ejecutar(t => t.LeerTabla("FERRETERIATIA", "conductor", new[] { "CODIGO", "NOMBRE", "PASS" }), _timeout, "leer conductores");
             return conductores
                 .Where(c => Igual(c[1], nombre) && Igual(c[2], password))
-                .Select(c => c[0])
+                .Select(c => (string)c[0])
                 .FirstOrDefault();
         }
 
+        /// <summary>Un operario sin contraseña en oper_contrasena no coincide (en interface.s50c provoca un 500).</summary>
         public string AutenticarOperario(string nombre, string password)
         {
             var operarios = _sesion.Ejecutar(t => t.LeerTabla("COMUNES", "operario", new[] { "CODIGO", "NOMBRE" }), _timeout, "leer operarios");
             var contrasenas = _sesion.Ejecutar(t => t.LeerTabla("GESTIONMERC", "oper_contrasena", new[] { "OPERARIO", "CONTRASENA" }), _timeout, "leer contraseñas de operarios");
 
-            // interface.s50c hace un left join y falla (500) con un operario sin contraseña: aquí simplemente no coincide.
             return (from o in operarios
-                    join c in contrasenas on o[0]?.Trim() equals c[0]?.Trim()
+                    join c in contrasenas on ((string)o[0])?.Trim() equals ((string)c[0])?.Trim()
                     where Igual(o[1], nombre) && Igual(c[1], password)
-                    select o[0])
+                    select (string)o[0])
                 .FirstOrDefault();
         }
 
-        private static bool Igual(string valorTabla, string valorPedido)
+        private static bool Igual(object valorTabla, string valorPedido)
         {
-            return valorTabla != null && valorPedido != null && valorTabla.Trim() == valorPedido.Trim();
+            return valorTabla is string texto && valorPedido != null && texto.Trim() == valorPedido.Trim();
         }
     }
 }

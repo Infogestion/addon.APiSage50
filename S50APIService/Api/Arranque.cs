@@ -1,6 +1,5 @@
 using System.Web.Http;
 using System.Web.Http.ExceptionHandling;
-using Newtonsoft.Json.Serialization;
 using Owin;
 using S50APIService.Api.Autenticacion;
 
@@ -12,18 +11,15 @@ namespace S50APIService.Api
         public static void Configurar(IAppBuilder app)
         {
             var config = new HttpConfiguration();
-            // Rutas por atributos ([Route], [HttpGet]...), como los controladores de interface.s50c.
             config.MapHttpAttributeRoutes();
 
-            // Solo JSON, con nombres en camelCase como System.Text.Json en ASP.NET Core.
-            config.Formatters.Remove(config.Formatters.XmlFormatter);
-            config.Formatters.JsonFormatter.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+            config.Formatters.Clear();
+            config.Formatters.Add(new FormateadorJson());
 
             config.Services.Add(typeof(IExceptionLogger), new RegistroExcepciones());
             config.MessageHandlers.Add(new ManejadorErroresSinCuerpo());
             config.MessageHandlers.Add(new ManejadorJwt(Contexto.Jwt));
 
-            // En producción ASP.NET Core no devuelve detalles de las excepciones.
             config.IncludeErrorDetailPolicy = IncludeErrorDetailPolicy.Never;
 
             Swagger.Configurar(app);

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Web.Http;
 using S50APIService.Api.Autenticacion;
@@ -8,7 +9,6 @@ namespace S50APIService.Api.Controladores
 {
     public sealed class AuthenticationController : ApiController
     {
-        // Token Bearer para llamar al resto de rutas: 200 con el token como texto o 401.
         /// <summary>GetToken</summary>
         [HttpPost]
         [Route("api/token/{username}/{password}")]
@@ -19,7 +19,6 @@ namespace S50APIService.Api.Controladores
             return Respuestas.NoAutorizado();
         }
 
-        // Login de la app Nadilux Repartos con un conductor: 200 con {"token", "driverCode"}, 401 o 400 si falta el cuerpo.
         /// <summary>GetTokenAppNadiluxRepartos</summary>
         [HttpPost]
         [Route("api/nadilux-repartos/{business}/token")]
@@ -35,7 +34,6 @@ namespace S50APIService.Api.Controladores
             return Respuestas.Json(new { token = Contexto.Jwt.GenerarTokenNadilux(request.Username, business), driverCode = codigo });
         }
 
-        // true si el token es válido; si no, 401 (lo resuelve [Autorizar]).
         /// <summary>ValidateTokenApi</summary>
         [HttpGet]
         [Route("api/validate-token")]
@@ -45,7 +43,6 @@ namespace S50APIService.Api.Controladores
             return true;
         }
 
-        // Igual que api/validate-token; interface.s50c la mantiene para la app de repartos.
         /// <summary>ValidateToken</summary>
         [HttpGet]
         [Route("api/nadilux-repartos/validate-token")]
@@ -55,7 +52,6 @@ namespace S50APIService.Api.Controladores
             return true;
         }
 
-        // Prueba de conexión con la API: siempre true, igual que interface.s50c.
         /// <summary>Prueba de conexíón a la api</summary>
         [HttpGet]
         [Route("api/has-connection")]
@@ -64,7 +60,6 @@ namespace S50APIService.Api.Controladores
             return true;
         }
 
-        // Igual que api/has-connection; interface.s50c la mantiene para la app de repartos.
         /// <summary>Prueba de conexíón a la api</summary>
         [HttpGet]
         [Route("api/nadilux-repartos/has-connection")]
@@ -73,8 +68,6 @@ namespace S50APIService.Api.Controladores
             return true;
         }
 
-        // Login de la app Nadilux Mercancías con un operario: 200 con {"token", "operarioCode"}, 401 o 400 si falta el cuerpo.
-        // El token es el mismo que el de repartos (interface.s50c usa GenerateTokenNadiluxRepartos en los dos).
         /// <summary>GetTokenOperarioGestionMercancia</summary>
         [HttpPost]
         [Route("api/nadilux-mercancias/{business}/token")]
@@ -92,22 +85,40 @@ namespace S50APIService.Api.Controladores
 
         /// <summary>
         /// La validación automática de ASP.NET Core: con Nullable activado en interface.s50c, el cuerpo y sus dos campos
-        /// son obligatorios (vacío o solo espacios cuenta como que falta). Null = válido.
+        /// son obligatorios: solo falla si faltan (null), porque el [Required] implícito admite textos vacíos.
+        /// Los errores van en el mismo orden que allí: sin cuerpo, "" y "request"; con JSON no válido, "request" y la ruta
+        /// del error (FormateadorJson la deja en el ModelState como "request.$..."), salvo si es la raíz "$", que va antes.
+        /// Null = válido.
         /// </summary>
-        private static HttpResponseMessage ValidarLogin(LoginNadRepartosRequest request)
+        private HttpResponseMessage ValidarLogin(LoginNadRepartosRequest request)
         {
             var errores = new Dictionary<string, string[]>();
             if (request == null)
             {
-                errores[""] = new[] { "A non-empty request body is required." };
-                errores["request"] = new[] { "The request field is required." };
+                var errorJson = ModelState.FirstOrDefault(e => e.Value.Errors.Count > 0);
+                if (errorJson.Key == null)
+                {
+                    errores[""] = new[] { "A non-empty request body is required." };
+                    errores["request"] = new[] { "The request field is required." };
+                }
+                else
+                {
+                    string ruta = errorJson.Key.StartsWith("request.") ? errorJson.Key.Substring("request.".Length) : errorJson.Key;
+                    var mensajes = errorJson.Value.Errors.Select(e => e.ErrorMessage).ToArray();
+                    bool enRaiz = ruta.IndexOfAny(new[] { '.', '[' }) < 0;
+                    if (enRaiz)
+                        errores[ruta] = mensajes;
+                    errores["request"] = new[] { "The request field is required." };
+                    if (!enRaiz)
+                        errores[ruta] = mensajes;
+                }
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(request.Username))
-                    errores["Username"] = new[] { "The Username field is required." };
-                if (string.IsNullOrWhiteSpace(request.Password))
+                if (request.Password == null)
                     errores["Password"] = new[] { "The Password field is required." };
+                if (request.Username == null)
+                    errores["Username"] = new[] { "The Username field is required." };
             }
             return errores.Count == 0 ? null : Respuestas.ErrorValidacion(errores);
         }

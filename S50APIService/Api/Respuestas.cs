@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace S50APIService.Api
 {
@@ -33,7 +33,7 @@ namespace S50APIService.Api
         /// <summary>Ok(objeto) en ASP.NET Core: el objeto como application/json; charset=utf-8.</summary>
         public static HttpResponseMessage Json(object valor)
         {
-            var contenido = new StringContent(JsonConvert.SerializeObject(valor), new UTF8Encoding(false));
+            var contenido = new StringContent(JsonSerializer.Serialize(valor, FormateadorJson.Opciones), new UTF8Encoding(false));
             contenido.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
         }
@@ -50,7 +50,6 @@ namespace S50APIService.Api
 
         private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null)
         {
-            // Mismo orden de propiedades que el ProblemDetails de ASP.NET Core 6.
             var problema = new Dictionary<string, object>
             {
                 ["type"] = tipo,
@@ -60,7 +59,7 @@ namespace S50APIService.Api
             };
             if (errores != null)
                 problema["errors"] = errores;
-            var contenido = new StringContent(JsonConvert.SerializeObject(problema), new UTF8Encoding(false));
+            var contenido = new StringContent(JsonSerializer.Serialize(problema, FormateadorJson.Opciones), new UTF8Encoding(false));
             contenido.Headers.ContentType = new MediaTypeHeaderValue("application/problem+json") { CharSet = "utf-8" };
             return new HttpResponseMessage(estado) { Content = contenido };
         }
