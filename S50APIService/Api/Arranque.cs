@@ -24,6 +24,7 @@ namespace S50APIService.Api
             // En producción ASP.NET Core no devuelve detalles de las excepciones.
             config.IncludeErrorDetailPolicy = IncludeErrorDetailPolicy.Never;
 
+            Swagger.Configurar(app);
             app.UseWebApi(config);
             config.EnsureInitialized();
         }

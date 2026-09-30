@@ -4,10 +4,11 @@ using S50APIService.Api.Autenticacion;
 
 namespace S50APIService.Api.Controladores
 {
-    /// <summary>TestingController de interface.s50c.</summary>
+    // TestingController de interface.s50c.
     [RoutePrefix("api/testing")]
     public sealed class TestingController : ApiController
     {
+        /// <summary>Prueba de Hello sin autentificación</summary>
         [HttpGet]
         [Route("hello")]
         public HttpResponseMessage Hello()
@@ -15,6 +16,7 @@ namespace S50APIService.Api.Controladores
             return Respuestas.Texto("Hello!");
         }
 
+        /// <summary>Prueba de Hello con autentificación</summary>
         [HttpGet]
         [Route("helloAuth")]
         [Autorizar]

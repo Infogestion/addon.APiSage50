@@ -8,19 +8,25 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <RootNamespace>S50APIService</RootNamespace>
+    <!-- Swagger toma los textos de los comentarios /// <summary> de los controladores. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <!--
-      Las librerías de NuGet (JWT, System.Memory...) necesitan redirecciones de versión en S50APIService.exe.config.
-      Solo afectan al proceso principal: dentro del AppDomain de Sage se aplica sage.50.exe.config.
-      MSB3276/MSB3277 avisan de versiones distintas entre esas librerías y las de la carpeta de Sage: no se mezclan
-      en ejecución porque cada AppDomain carga las suyas.
+      Las librerías de NuGet (JWT, System.Text.Json, System.Memory...) necesitan redirecciones de versión en
+      S50APIService.exe.config. Solo afectan al proceso principal: dentro del AppDomain de Sage se aplica sage.50.exe.config.
     -->
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <MSBuildWarningsAsMessages>MSB3276;MSB3277</MSBuildWarningsAsMessages>
     <!--
       Librerías de Sage contra las que se compila. En ejecución se usan las del terminal configurado en App.config.
       Se puede cambiar al compilar: dotnet build -p:SageLibs="C:\ruta\a\las\librerias"
     -->
     <SageLibs Condition="'$(SageLibs)' == ''">D:\Sage50Tias\Sage50Term2\2026.3.20</SageLibs>
+    <!--
+      Se compila contra una copia de solo sage.50.exe y sage.ew.db.dll. Si se referenciaran en la carpeta de Sage, MSBuild
+      analizaría también las dependencias de esa carpeta (con otras versiones de System.Text.Json, etc.) y generaría mal
+      las redirecciones de versión de las librerías de NuGet.
+    -->
+    <SageReferencias>$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)sage\</SageReferencias>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,22 +37,33 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNet.WebApi.OwinSelfHost" Version="5.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="NSwag.AspNet.Owin" Version="14.7.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+    <!--
+      Referencia explícita: sage.50.exe usa System.Text.Json 10.0.0.6 y las librerías de JWT y NSwag versiones anteriores.
+      Con una versión igual o superior a la de Sage, MSBuild puede generar la redirección para todas; si fuera menor,
+      no la generaría y el JWT fallaría al ejecutarse (FileLoadException).
+    -->
+    <PackageReference Include="System.Text.Json" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="System.Configuration" />
     <Reference Include="System.Data" />
     <Reference Include="sage.50">
-      <HintPath>$(SageLibs)\sage.50.exe</HintPath>
+      <HintPath>$(SageReferencias)sage.50.exe</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
     <Reference Include="sage.ew.db">
-      <HintPath>$(SageLibs)\sage.ew.db.dll</HintPath>
+      <HintPath>$(SageReferencias)sage.ew.db.dll</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
   </ItemGroup>
+
+  <Target Name="CopiarReferenciasSage" BeforeTargets="ResolveAssemblyReferences">
+    <Copy SourceFiles="$(SageLibs)\sage.50.exe;$(SageLibs)\sage.ew.db.dll" DestinationFolder="$(SageReferencias)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
