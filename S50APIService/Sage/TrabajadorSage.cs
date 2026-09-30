@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Reflection;
 using sage._50;
 using sage.ew.db;
@@ -54,12 +55,13 @@ namespace S50APIService.Sage
         /// (string, bool, decimal, DateTime...; null si la columna es NULL). Son tipos básicos, así que pasan sin problema
         /// al resto del servicio. <paramref name="baseDatos"/> es el nombre lógico de Sage ("COMUNES", "2025", o el de un
         /// addon como "FERRETERIATIA"): Sage lo traduce a la base de datos real del grupo de empresas conectado.
+        /// Las columnas van entre corchetes porque algunas son palabras reservadas de SQL Server (p. ej. ANY en ejercici).
         /// </summary>
         public List<object[]> LeerTabla(string baseDatos, string tabla, string[] columnas)
         {
             return EnSage(() =>
             {
-                string sql = "SELECT " + string.Join(", ", columnas) + " FROM " + DB.SQLDatabase(baseDatos, tabla);
+                string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla);
                 var datos = new DataTable();
                 if (!DB.SQLExec(sql, ref datos))
                     throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
