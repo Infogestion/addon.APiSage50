@@ -56,14 +56,19 @@ namespace S50APIService.Sage
         /// al resto del servicio. <paramref name="baseDatos"/> es el nombre lógico de Sage ("COMUNES", "2025", o el de un
         /// addon como "FERRETERIATIA"): Sage lo traduce a la base de datos real del grupo de empresas conectado.
         /// Las columnas van entre corchetes porque algunas son palabras reservadas de SQL Server (p. ej. ANY en ejercici).
+        /// <paramref name="condicion"/> es el WHERE (sin la palabra), con parámetros @nombre cuyos valores van en
+        /// <paramref name="parametros"/> y se envían a SQL Server como varchar, nunca concatenados en la consulta.
         /// </summary>
-        public List<object[]> LeerTabla(string baseDatos, string tabla, string[] columnas)
+        public List<object[]> LeerTabla(string baseDatos, string tabla, string[] columnas, string condicion = null, Dictionary<string, string> parametros = null)
         {
             return EnSage(() =>
             {
-                string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla);
+                string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla)
+                    + (condicion == null ? "" : " WHERE " + condicion);
                 var datos = new DataTable();
-                if (!DB.SQLExec(sql, ref datos))
+                var consultaParametros = (parametros ?? new Dictionary<string, string>())
+                    .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
+                if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
                     throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
 
                 var filas = new List<object[]>(datos.Rows.Count);
@@ -78,6 +83,14 @@ namespace S50APIService.Sage
             });
         }
 
+        /// <summary>
+        /// True si Sage conoce <paramref name="baseDatos"/> (p. ej. el ejercicio "2025") y esa base de datos existe en el
+        /// servidor. Sage puede tener el alias de un ejercicio cuya base de datos ya no existe.
+        /// </summary>
+        public bool ExisteBaseDatos(string baseDatos)
+        {
+            return EnSage(() => DB.SQLDatabaseExistStrict(baseDatos));
+        }
 
         private static string Global(string variable) => Convert.ToString(EW_GLOBAL._GetVariable(variable)).Trim();
 

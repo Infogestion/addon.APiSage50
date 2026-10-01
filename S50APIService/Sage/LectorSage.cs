@@ -16,6 +16,12 @@ namespace S50APIService.Sage
         public ColumnaAttribute(string nombre) { Nombre = nombre; }
     }
 
+    /// <summary>La base de datos del ejercicio pedido no existe (DBNotFoundException en interface.s50c).</summary>
+    public sealed class EjercicioNoEncontradoException : Exception
+    {
+        public EjercicioNoEncontradoException(string ejercicio) : base($"No existe la base de datos del ejercicio {ejercicio}.") { }
+    }
+
     /// <summary>
     /// Lee tablas de Sage y las convierte en objetos de los modelos de la API (equivale a los DbSet de EF en interface.s50c).
     /// Cada propiedad pública del modelo es una columna: su nombre en mayúsculas, o el de <see cref="ColumnaAttribute"/>.
@@ -31,13 +37,16 @@ namespace S50APIService.Sage
             _timeout = timeout;
         }
 
-        /// <summary>Todas las filas de <paramref name="tabla"/>, en el orden en que las devuelve SQL Server (como EF sin OrderBy).</summary>
-        public List<T> Leer<T>(string baseDatos, string tabla) where T : new()
+        /// <summary>
+        /// Las filas de <paramref name="tabla"/> que cumplen <paramref name="condicion"/> (todas si es null), en el orden en que
+        /// las devuelve SQL Server (como EF sin OrderBy). Ver <see cref="TrabajadorSage.LeerTabla"/> para la condición y sus parámetros.
+        /// </summary>
+        public List<T> Leer<T>(string baseDatos, string tabla, string condicion = null, Dictionary<string, string> parametros = null) where T : new()
         {
             var propiedades = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanWrite).ToArray();
             var columnas = propiedades.Select(p => p.GetCustomAttribute<ColumnaAttribute>()?.Nombre ?? p.Name.ToUpperInvariant()).ToArray();
 
-            var filas = _sesion.Ejecutar(t => t.LeerTabla(baseDatos, tabla, columnas), _timeout, $"leer {baseDatos}.{tabla}");
+            var filas = _sesion.Ejecutar(t => t.LeerTabla(baseDatos, tabla, columnas, condicion, parametros), _timeout, $"leer {baseDatos}.{tabla}");
 
             var resultado = new List<T>(filas.Count);
             foreach (var fila in filas)
@@ -48,6 +57,17 @@ namespace S50APIService.Sage
                 resultado.Add(objeto);
             }
             return resultado;
+        }
+
+        /// <summary>
+        /// Como <see cref="Leer{T}"/>, pero de la base de datos del ejercicio <paramref name="ejercicio"/> (el {year} de las rutas).
+        /// Si no existe, lanza <see cref="EjercicioNoEncontradoException"/>, que la API convierte en el 404 de interface.s50c.
+        /// </summary>
+        public List<T> LeerEjercicio<T>(string ejercicio, string tabla, string condicion = null, Dictionary<string, string> parametros = null) where T : new()
+        {
+            if (!_sesion.Ejecutar(t => t.ExisteBaseDatos(ejercicio), _timeout, $"comprobar el ejercicio {ejercicio}"))
+                throw new EjercicioNoEncontradoException(ejercicio);
+            return Leer<T>(ejercicio, tabla, condicion, parametros);
         }
 
         /// <summary>El valor de SQL al tipo de la propiedad (p. ej. un smallint a int); null solo si la propiedad lo admite.</summary>

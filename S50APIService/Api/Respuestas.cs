@@ -48,15 +48,27 @@ namespace S50APIService.Api
                 "One or more validation errors occurred.", errores);
         }
 
-        private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null)
+        /// <summary>
+        /// ValidationProblem(DBNotFoundException.Message, null, 404) de interface.s50c: la base de datos del ejercicio de la
+        /// ruta ({year}) no existe. Lleva "detail" y un "errors" vacío.
+        /// </summary>
+        public static HttpResponseMessage EjercicioNoEncontrado()
+        {
+            return Problema(HttpStatusCode.NotFound, "https://tools.ietf.org/html/rfc7231#section-6.5.4",
+                "One or more validation errors occurred.", new Dictionary<string, string[]>(), "The db for the requested year does not exist");
+        }
+
+        private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null, string detalle = null)
         {
             var problema = new Dictionary<string, object>
             {
                 ["type"] = tipo,
                 ["title"] = titulo,
                 ["status"] = (int)estado,
-                ["traceId"] = NuevoTraceId(),
             };
+            if (detalle != null)
+                problema["detail"] = detalle;
+            problema["traceId"] = NuevoTraceId();
             if (errores != null)
                 problema["errors"] = errores;
             var contenido = new StringContent(JsonSerializer.Serialize(problema, FormateadorJson.Opciones), new UTF8Encoding(false));

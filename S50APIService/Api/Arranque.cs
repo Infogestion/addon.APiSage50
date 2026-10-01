@@ -17,6 +17,7 @@ namespace S50APIService.Api
             config.Formatters.Add(new FormateadorJson());
 
             config.Services.Add(typeof(IExceptionLogger), new RegistroExcepciones());
+            config.Services.Replace(typeof(IExceptionHandler), new ManejadorExcepciones());
             config.MessageHandlers.Add(new ManejadorErroresSinCuerpo());
             config.MessageHandlers.Add(new ManejadorJwt(Contexto.Jwt));
 
