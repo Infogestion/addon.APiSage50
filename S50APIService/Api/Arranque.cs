@@ -20,6 +20,7 @@ namespace S50APIService.Api
             config.Services.Replace(typeof(IExceptionHandler), new ManejadorExcepciones());
             config.MessageHandlers.Add(new ManejadorErroresSinCuerpo());
             config.MessageHandlers.Add(new ManejadorJwt(Contexto.Jwt));
+            config.Filters.Add(new ValidacionEnteros());
 
             config.IncludeErrorDetailPolicy = IncludeErrorDetailPolicy.Never;
 
