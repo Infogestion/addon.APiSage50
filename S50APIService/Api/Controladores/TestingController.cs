@@ -4,7 +4,6 @@ using S50APIService.Api.Autenticacion;
 
 namespace S50APIService.Api.Controladores
 {
-    // TestingController de interface.s50c.
     [RoutePrefix("api/testing")]
     public sealed class TestingController : ApiController
     {

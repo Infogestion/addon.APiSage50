@@ -25,9 +25,10 @@ namespace S50APIService.Api.Controladores
         /// </summary>
         [HttpGet]
         [Route("")]
-        public List<Proveed> Get(int page = 1, int pageSize = 100)
+        [ResponseType(typeof(List<Proveed>))]
+        public HttpResponseMessage Get(int page = 1, int pageSize = 100)
         {
-            return Contexto.Lector.LeerEjercicio<Proveed>(Ejercicio, "proveed");
+            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Proveed>(Ejercicio, "proveed"));
         }
 
         /// <summary>

@@ -38,6 +38,14 @@ namespace S50APIService.Api
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
         }
 
+        /// <summary>Como <see cref="Json"/>, con el JSON ya escrito en bloques (los listados de <see cref="Sage.LectorSage.LeerJson{T}"/>).</summary>
+        public static HttpResponseMessage JsonBloques(List<byte[]> bloques)
+        {
+            var contenido = new ContenidoBloques(bloques);
+            contenido.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
+        }
+
         /// <summary>
         /// El 400 automático de un [ApiController] cuando el modelo no es válido (ValidationProblemDetails):
         /// <paramref name="errores"/> son los campos con sus mensajes, en el orden en que se muestran.

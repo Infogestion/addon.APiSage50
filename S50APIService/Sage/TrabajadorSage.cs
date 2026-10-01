@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using sage._50;
@@ -16,14 +17,24 @@ namespace S50APIService.Sage
     /// </summary>
     public sealed class TrabajadorSage : MarshalByRefObject
     {
-        // Sin esto, el proxy caduca tras unos minutos sin llamadas y el servicio pierde la sesión.
+        /// <summary>El proxy no caduca: el servicio lo usa mientras está en marcha.</summary>
         public override object InitializeLifetimeService() => null;
 
+        /// <summary>Hace que el AppDomain de Sage encuentre este ensamblado y sus librerías, que están en la carpeta del servicio.</summary>
         public TrabajadorSage()
         {
-            // Sin esto, las llamadas entre AppDomains no encuentran este ensamblado (se cargó por ruta, no desde la carpeta de Sage).
             var propio = typeof(TrabajadorSage).Assembly;
-            AppDomain.CurrentDomain.AssemblyResolve += (s, e) => new AssemblyName(e.Name).Name == propio.GetName().Name ? propio : null;
+            string carpeta = Path.GetDirectoryName(propio.Location);
+            AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
+            {
+                string nombre = new AssemblyName(e.Name).Name;
+                if (nombre == propio.GetName().Name)
+                    return propio;
+                bool loPideElServicio = e.RequestingAssembly != null && !e.RequestingAssembly.IsDynamic
+                    && string.Equals(Path.GetDirectoryName(e.RequestingAssembly.Location), carpeta, StringComparison.OrdinalIgnoreCase);
+                string ruta = Path.Combine(carpeta, nombre + ".dll");
+                return loPideElServicio && File.Exists(ruta) ? Assembly.LoadFrom(ruta) : null;
+            };
         }
 
         /// <summary>Arranque externo de Sage: sin pantalla de login, sin escritorio y sin consumir puesto de licencia.</summary>
@@ -63,14 +74,7 @@ namespace S50APIService.Sage
         {
             return EnSage(() =>
             {
-                string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla)
-                    + (condicion == null ? "" : " WHERE " + condicion);
-                var datos = new DataTable();
-                var consultaParametros = (parametros ?? new Dictionary<string, string>())
-                    .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
-                if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
-                    throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
-
+                var datos = Consultar(baseDatos, tabla, columnas, condicion, parametros);
                 var filas = new List<object[]>(datos.Rows.Count);
                 foreach (DataRow fila in datos.Rows)
                 {
@@ -81,6 +85,31 @@ namespace S50APIService.Sage
                 }
                 return filas;
             });
+        }
+
+        /// <summary>
+        /// Como <see cref="LeerTabla"/>, pero escribe el array JSON de las filas y lo entrega en bloques a <paramref name="destino"/>.
+        /// </summary>
+        public void EscribirTablaJson(string baseDatos, string tabla, CampoJson[] campos, string condicion, Dictionary<string, string> parametros, BloquesJson destino)
+        {
+            EnSage(() =>
+            {
+                var datos = Consultar(baseDatos, tabla, campos.Select(c => c.Columna).ToArray(), condicion, parametros);
+                EscritorJson.Escribir(datos, campos, destino);
+                return 0;
+            });
+        }
+
+        private static DataTable Consultar(string baseDatos, string tabla, string[] columnas, string condicion, Dictionary<string, string> parametros)
+        {
+            string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla)
+                + (condicion == null ? "" : " WHERE " + condicion);
+            var datos = new DataTable();
+            var consultaParametros = (parametros ?? new Dictionary<string, string>())
+                .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
+            if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
+                throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
+            return datos;
         }
 
         /// <summary>

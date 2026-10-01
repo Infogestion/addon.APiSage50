@@ -18,9 +18,10 @@ namespace S50APIService.Api.Controladores
         /// </summary>
         [HttpGet]
         [Route("")]
-        public List<Almacen> Get(string year)
+        [ResponseType(typeof(List<Almacen>))]
+        public HttpResponseMessage Get(string year)
         {
-            return Contexto.Lector.LeerEjercicio<Almacen>(year, "almacen");
+            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Almacen>(year, "almacen"));
         }
 
         /// <summary>

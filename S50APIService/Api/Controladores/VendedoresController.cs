@@ -25,9 +25,10 @@ namespace S50APIService.Api.Controladores
         /// </summary>
         [HttpGet]
         [Route("")]
-        public List<Vendedor> Get()
+        [ResponseType(typeof(List<Vendedor>))]
+        public HttpResponseMessage Get()
         {
-            return Contexto.Lector.LeerEjercicio<Vendedor>(Ejercicio, "vendedor");
+            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Vendedor>(Ejercicio, "vendedor"));
         }
 
         /// <summary>

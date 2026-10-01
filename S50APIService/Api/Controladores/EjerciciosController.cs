@@ -22,9 +22,10 @@ namespace S50APIService.Api.Controladores
         /// </summary>
         [HttpGet]
         [Route("")]
-        public List<Ejercici> Get()
+        [ResponseType(typeof(List<Ejercici>))]
+        public HttpResponseMessage Get()
         {
-            return Contexto.Lector.Leer<Ejercici>("COMUNES", "ejercici");
+            return Respuestas.JsonBloques(Contexto.Lector.LeerJson<Ejercici>("COMUNES", "ejercici"));
         }
 
         /// <summary>

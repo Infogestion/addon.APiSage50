@@ -19,9 +19,9 @@ namespace S50APIService.Api
     /// </summary>
     public sealed class FormateadorJson : MediaTypeFormatter
     {
+        /// <summary>Las opciones de ASP.NET Core MVC: su codificador escapa U+00A0 pero no las letras acentuadas.</summary>
         public static readonly JsonSerializerOptions Opciones = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            // No cambiar: es el de ASP.NET Core MVC (escapa U+00A0 pero no las letras acentuadas); con otro el JSON no sería idéntico.
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
 

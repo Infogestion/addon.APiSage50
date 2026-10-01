@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Web.Http;
+using System.Web.Http.Description;
 using S50APIService.Api.Autenticacion;
 using S50APIService.Api.Modelos;
 
@@ -12,9 +14,10 @@ namespace S50APIService.Api.Controladores
         /// <summary>Permite obtener todos los operarios</summary>
         [HttpGet]
         [Route("")]
-        public List<Operario> Get()
+        [ResponseType(typeof(List<Operario>))]
+        public HttpResponseMessage Get()
         {
-            return Contexto.Lector.Leer<Operario>("COMUNES", "operario");
+            return Respuestas.JsonBloques(Contexto.Lector.LeerJson<Operario>("COMUNES", "operario"));
         }
     }
 }

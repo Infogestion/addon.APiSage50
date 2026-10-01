@@ -22,7 +22,6 @@ namespace S50APIService.Api
 
         public static void Configurar(IAppBuilder app)
         {
-            // Llamada explícita a la extensión de OWIN: app.Use(método) elegiría la sobrecarga Use(object).
             AppBuilderUseExtensions.Use(app, Redirecciones);
 
             app.UseOpenApi(typeof(Swagger).Assembly, s =>
@@ -35,7 +34,6 @@ namespace S50APIService.Api
             {
                 s.Path = "/swagger";
                 s.DocumentPath = RutaDocumento;
-                // Ruta absoluta: NSwag convierte una relativa ("v1/swagger.json") en "/v1/swagger.json", que no existe.
                 s.SwaggerRoutes.Add(new SwaggerUiRoute("interface.s50c.WebAPI v1", RutaDocumento));
                 s.DocExpansion = "none";
                 Generador(s.GeneratorSettings);

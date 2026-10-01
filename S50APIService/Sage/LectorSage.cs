@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting;
+using System.Text.Json;
 
 namespace S50APIService.Sage
 {
@@ -65,9 +67,48 @@ namespace S50APIService.Sage
         /// </summary>
         public List<T> LeerEjercicio<T>(string ejercicio, string tabla, string condicion = null, Dictionary<string, string> parametros = null) where T : new()
         {
+            ComprobarEjercicio(ejercicio);
+            return Leer<T>(ejercicio, tabla, condicion, parametros);
+        }
+
+        /// <summary>
+        /// Las mismas filas que <see cref="Leer{T}"/>, ya como JSON (el array de modelos <typeparamref name="T"/>) en bloques de bytes.
+        /// Para los listados: el JSON se escribe dentro de Sage y no se crea un objeto por fila.
+        /// </summary>
+        public List<byte[]> LeerJson<T>(string baseDatos, string tabla, string condicion = null, Dictionary<string, string> parametros = null)
+        {
+            var campos = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanWrite).Select(p => new CampoJson
+            {
+                Columna = p.GetCustomAttribute<ColumnaAttribute>()?.Nombre ?? p.Name.ToUpperInvariant(),
+                Nombre = JsonNamingPolicy.CamelCase.ConvertName(p.Name),
+                Tipo = Type.GetTypeCode(Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType),
+                AdmiteNull = !p.PropertyType.IsValueType || Nullable.GetUnderlyingType(p.PropertyType) != null,
+            }).ToArray();
+
+            var destino = new BloquesJson();
+            try
+            {
+                _sesion.Ejecutar(t => { t.EscribirTablaJson(baseDatos, tabla, campos, condicion, parametros, destino); return 0; },
+                    _timeout, $"leer {baseDatos}.{tabla}");
+                return destino.Tomar();
+            }
+            finally
+            {
+                RemotingServices.Disconnect(destino);
+            }
+        }
+
+        /// <summary>Como <see cref="LeerJson{T}"/>, pero del ejercicio <paramref name="ejercicio"/> (ver <see cref="LeerEjercicio{T}"/>).</summary>
+        public List<byte[]> LeerEjercicioJson<T>(string ejercicio, string tabla, string condicion = null, Dictionary<string, string> parametros = null)
+        {
+            ComprobarEjercicio(ejercicio);
+            return LeerJson<T>(ejercicio, tabla, condicion, parametros);
+        }
+
+        private void ComprobarEjercicio(string ejercicio)
+        {
             if (!_sesion.Ejecutar(t => t.ExisteBaseDatos(ejercicio), _timeout, $"comprobar el ejercicio {ejercicio}"))
                 throw new EjercicioNoEncontradoException(ejercicio);
-            return Leer<T>(ejercicio, tabla, condicion, parametros);
         }
 
         /// <summary>El valor de SQL al tipo de la propiedad (p. ej. un smallint a int); null solo si la propiedad lo admite.</summary>
