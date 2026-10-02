@@ -57,6 +57,19 @@ namespace S50APIService.Api
         }
 
         /// <summary>
+        /// El 400 de un [ApiController] cuando faltan textos obligatorios (null, vacíos o en blanco), con los errores en el
+        /// orden en que se pasan. Null si no falta ninguno.
+        /// </summary>
+        public static HttpResponseMessage FaltanObligatorios(params (string Nombre, string Valor)[] campos)
+        {
+            var errores = new Dictionary<string, string[]>();
+            foreach (var campo in campos)
+                if (string.IsNullOrWhiteSpace(campo.Valor))
+                    errores[campo.Nombre] = new[] { $"The {campo.Nombre} field is required." };
+            return errores.Count == 0 ? null : ErrorValidacion(errores);
+        }
+
+        /// <summary>
         /// ValidationProblem(DBNotFoundException.Message, null, 404) de interface.s50c: la base de datos del ejercicio de la
         /// ruta ({year}) no existe. Lleva "detail" y un "errors" vacío.
         /// </summary>

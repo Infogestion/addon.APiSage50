@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Web.Http.ExceptionHandling;
 using System.Web.Http.Results;
 using S50APIService.Sage;
@@ -13,8 +15,9 @@ namespace S50APIService.Api
     {
         public override void Handle(ExceptionHandlerContext contexto)
         {
-            if (contexto.Exception is EjercicioNoEncontradoException)
-                contexto.Result = new ResponseMessageResult(Respuestas.EjercicioNoEncontrado());
+            contexto.Result = new ResponseMessageResult(contexto.Exception is EjercicioNoEncontradoException
+                ? Respuestas.EjercicioNoEncontrado()
+                : new HttpResponseMessage(HttpStatusCode.InternalServerError));
         }
     }
 }
