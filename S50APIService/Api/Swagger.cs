@@ -42,8 +42,8 @@ namespace S50APIService.Api
 
         private static void Generador(NSwag.Generation.WebApi.WebApiOpenApiDocumentGeneratorSettings g)
         {
-            g.Title = "interface.s50c";
-            g.Version = "v1";
+            g.Title = "addon.APISage50";
+            g.Version = "Versión en desarrollo";
             string nl = Environment.NewLine;
             g.Description = $"v{VersionApi}{TipoVersionApi}{nl}{nl}"
                 + $"Todas las llamadas, excepto 'POST/api/token', tienen Autorización mediante BearerToken siendo enviado en la cabecera HTTP de cada endpoint.{nl}\r\n"
