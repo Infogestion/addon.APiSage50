@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+
+namespace S50APIService.Sage
+{
+    /// <summary>
+    /// Una lectura de Sage con uniones entre tablas y paginación (los join y el Skip/Take de EF en interface.s50c).
+    /// </summary>
+    [Serializable]
+    public sealed class Consulta
+    {
+        /// <summary>
+        /// El FROM, con cada tabla entre llaves para que Sage la traduzca a la de la base de datos:
+        /// "{articulo} AS [a] INNER JOIN {barras} AS [b] ON [a].[CODIGO] = [b].[ARTICULO]".
+        /// </summary>
+        public string Origen { get; set; }
+
+        /// <summary>Alias de la tabla de la que salen las columnas del modelo; null si <see cref="Origen"/> es una sola tabla sin alias.</summary>
+        public string Alias { get; set; }
+
+        /// <summary>El WHERE (sin la palabra), con parámetros @nombre; null para todas las filas.</summary>
+        public string Condicion { get; set; }
+
+        /// <summary>Valores de los parámetros de <see cref="Condicion"/>; se envían a SQL Server como varchar.</summary>
+        public Dictionary<string, string> Parametros { get; set; }
+
+        /// <summary>Filas que se saltan (Skip de EF); null si no se pagina. Va siempre con <see cref="Tomar"/>.</summary>
+        public int? Saltar { get; set; }
+
+        /// <summary>Filas que se devuelven (Take de EF).</summary>
+        public int? Tomar { get; set; }
+    }
+}

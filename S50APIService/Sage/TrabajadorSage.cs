@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using sage._50;
 using sage.ew.db;
 using sage.ew.global;
@@ -72,9 +74,15 @@ namespace S50APIService.Sage
         /// </summary>
         public List<object[]> LeerTabla(string baseDatos, string tabla, string[] columnas, string condicion = null, Dictionary<string, string> parametros = null)
         {
+            return LeerConsulta(baseDatos, new Consulta { Origen = "{" + tabla + "}", Condicion = condicion, Parametros = parametros }, columnas);
+        }
+
+        /// <summary>Como <see cref="LeerTabla"/>, con las uniones y la paginación de <paramref name="consulta"/>.</summary>
+        public List<object[]> LeerConsulta(string baseDatos, Consulta consulta, string[] columnas)
+        {
             return EnSage(() =>
             {
-                var datos = Consultar(baseDatos, tabla, columnas, condicion, parametros);
+                var datos = Consultar(baseDatos, consulta, columnas);
                 var filas = new List<object[]>(datos.Rows.Count);
                 foreach (DataRow fila in datos.Rows)
                 {
@@ -88,25 +96,39 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Como <see cref="LeerTabla"/>, pero escribe el array JSON de las filas y lo entrega en bloques a <paramref name="destino"/>.
+        /// Como <see cref="LeerConsulta"/>, pero escribe el array JSON de las filas y lo entrega en bloques a <paramref name="destino"/>.
         /// </summary>
-        public void EscribirTablaJson(string baseDatos, string tabla, CampoJson[] campos, string condicion, Dictionary<string, string> parametros, BloquesJson destino)
+        public void EscribirConsultaJson(string baseDatos, Consulta consulta, CampoJson[] campos, BloquesJson destino)
         {
             EnSage(() =>
             {
-                var datos = Consultar(baseDatos, tabla, campos.Select(c => c.Columna).ToArray(), condicion, parametros);
+                var datos = Consultar(baseDatos, consulta, campos.Select(c => c.Columna).ToArray());
                 EscritorJson.Escribir(datos, campos, destino);
                 return 0;
             });
         }
 
-        private static DataTable Consultar(string baseDatos, string tabla, string[] columnas, string condicion, Dictionary<string, string> parametros)
+        /// <summary>
+        /// La paginación es la de EF Core sin OrderBy (ORDER BY (SELECT 1) OFFSET/FETCH), para que SQL Server devuelva
+        /// las mismas filas que a interface.s50c. Si se piden 0 filas, EF no pagina: consulta con WHERE 0 = 1.
+        /// </summary>
+        private static DataTable Consultar(string baseDatos, Consulta consulta, string[] columnas)
         {
-            string sql = "SELECT " + string.Join(", ", columnas.Select(c => "[" + c + "]")) + " FROM " + DB.SQLDatabase(baseDatos, tabla)
+            bool sinFilas = consulta.Tomar == 0;
+            string condicion = sinFilas ? "0 = 1" : consulta.Condicion;
+            string prefijo = consulta.Alias == null ? "" : "[" + consulta.Alias + "].";
+            string sql = "SELECT " + string.Join(", ", columnas.Select(c => prefijo + "[" + c + "]"))
+                + " FROM " + Regex.Replace(consulta.Origen, @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value))
                 + (condicion == null ? "" : " WHERE " + condicion);
-            var datos = new DataTable();
-            var consultaParametros = (parametros ?? new Dictionary<string, string>())
+            var consultaParametros = sinFilas ? new List<DB.QueryParams>() : (consulta.Parametros ?? new Dictionary<string, string>())
                 .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
+            if (consulta.Saltar != null && !sinFilas)
+            {
+                sql += " ORDER BY (SELECT 1) OFFSET @__saltar ROWS FETCH NEXT @__tomar ROWS ONLY";
+                consultaParametros.Add(new DB.QueryParams("@__saltar", consulta.Saltar.Value.ToString(CultureInfo.InvariantCulture), SqlDbType.Int));
+                consultaParametros.Add(new DB.QueryParams("@__tomar", consulta.Tomar.GetValueOrDefault().ToString(CultureInfo.InvariantCulture), SqlDbType.Int));
+            }
+            var datos = new DataTable();
             if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
                 throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
             return datos;

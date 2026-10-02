@@ -38,7 +38,7 @@ namespace S50APIService.Api
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
         }
 
-        /// <summary>Como <see cref="Json"/>, con el JSON ya escrito en bloques (los listados de <see cref="Sage.LectorSage.LeerJson{T}"/>).</summary>
+        /// <summary>Como <see cref="Json"/>, con el JSON ya escrito en bloques (los listados de <see cref="Sage.LectorSage.LeerJson{T}(string, Sage.Consulta)"/>).</summary>
         public static HttpResponseMessage JsonBloques(List<byte[]> bloques)
         {
             var contenido = new ContenidoBloques(bloques);
@@ -54,19 +54,6 @@ namespace S50APIService.Api
         {
             return Problema(HttpStatusCode.BadRequest, "https://tools.ietf.org/html/rfc7231#section-6.5.1",
                 "One or more validation errors occurred.", errores);
-        }
-
-        /// <summary>
-        /// El 400 de un [ApiController] cuando faltan textos obligatorios (null, vacíos o en blanco), con los errores en el
-        /// orden en que se pasan. Null si no falta ninguno.
-        /// </summary>
-        public static HttpResponseMessage FaltanObligatorios(params (string Nombre, string Valor)[] campos)
-        {
-            var errores = new Dictionary<string, string[]>();
-            foreach (var campo in campos)
-                if (string.IsNullOrWhiteSpace(campo.Valor))
-                    errores[campo.Nombre] = new[] { $"The {campo.Nombre} field is required." };
-            return errores.Count == 0 ? null : ErrorValidacion(errores);
         }
 
         /// <summary>

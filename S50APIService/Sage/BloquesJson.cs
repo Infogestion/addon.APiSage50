@@ -13,7 +13,7 @@ namespace S50APIService.Sage
         public bool AdmiteNull { get; set; }
     }
 
-    /// <summary>Recibe, fuera del AppDomain de Sage, los bloques de JSON que escribe <see cref="TrabajadorSage.EscribirTablaJson"/>.</summary>
+    /// <summary>Recibe, fuera del AppDomain de Sage, los bloques de JSON que escribe <see cref="TrabajadorSage.EscribirConsultaJson"/>.</summary>
     public sealed class BloquesJson : MarshalByRefObject
     {
         private List<byte[]> _bloques = new List<byte[]>();

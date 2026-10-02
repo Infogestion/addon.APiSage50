@@ -19,10 +19,6 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(List<Venser>))]
         public HttpResponseMessage GetByAlbaran(string year, string empresa, string albaran)
         {
-            var invalido = Respuestas.FaltanObligatorios(("albaran", albaran), ("empresa", empresa));
-            if (invalido != null)
-                return invalido;
-
             return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Venser>(year, "venser",
                 "LTRIM(RTRIM([EMPRESA])) = @empresa AND LTRIM(RTRIM([ALBARAN])) = @albaran",
                 new Dictionary<string, string> { ["@empresa"] = Valor(empresa), ["@albaran"] = Valor(albaran) }));
@@ -33,10 +29,6 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(Venser))]
         public HttpResponseMessage GetItem(string year, string empresa, string albaran, int linea, string serie)
         {
-            var invalido = Respuestas.FaltanObligatorios(("serie", serie), ("albaran", albaran), ("empresa", empresa));
-            if (invalido != null)
-                return invalido;
-
             var item = Contexto.Lector.LeerEjercicio<Venser>(year, "venser",
                 "LTRIM(RTRIM([EMPRESA])) = @empresa AND LTRIM(RTRIM([ALBARAN])) = @albaran AND [LINEA] = @linea AND LTRIM(RTRIM([SERIE])) = @serie",
                 new Dictionary<string, string>
