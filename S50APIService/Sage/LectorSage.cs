@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting;
+using System.Runtime.Serialization;
 using System.Text.Json;
 
 namespace S50APIService.Sage
@@ -22,6 +23,32 @@ namespace S50APIService.Sage
     public sealed class EjercicioNoEncontradoException : Exception
     {
         public EjercicioNoEncontradoException(string ejercicio) : base($"No existe la base de datos del ejercicio {ejercicio}.") { }
+    }
+
+    /// <summary>
+    /// Sage no ha podido ejecutar una consulta. <see cref="MensajeSql"/> es el error tal como lo da Sage (el de SQL Server).
+    /// Es serializable porque sale del AppDomain de Sage.
+    /// </summary>
+    [Serializable]
+    public sealed class ErrorSqlException : Exception
+    {
+        public string MensajeSql { get; }
+
+        public ErrorSqlException(string mensajeSql, string sql) : base($"Sage no ha podido ejecutar \"{sql}\": {mensajeSql}")
+        {
+            MensajeSql = mensajeSql;
+        }
+
+        private ErrorSqlException(SerializationInfo info, StreamingContext contexto) : base(info, contexto)
+        {
+            MensajeSql = info.GetString(nameof(MensajeSql));
+        }
+
+        public override void GetObjectData(SerializationInfo info, StreamingContext contexto)
+        {
+            base.GetObjectData(info, contexto);
+            info.AddValue(nameof(MensajeSql), MensajeSql);
+        }
     }
 
     /// <summary>

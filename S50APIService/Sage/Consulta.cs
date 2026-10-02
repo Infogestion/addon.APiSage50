@@ -18,6 +18,12 @@ namespace S50APIService.Sage
         /// <summary>Alias de la tabla de la que salen las columnas del modelo; null si <see cref="Origen"/> es una sola tabla sin alias.</summary>
         public string Alias { get; set; }
 
+        /// <summary>
+        /// Columnas del modelo que no salen de la tabla sino de una expresión SQL: nombre de la columna → expresión
+        /// (p. ej. "STOCKBYALMACEN" → "CASE WHEN ... END"). Null si no hay ninguna.
+        /// </summary>
+        public Dictionary<string, string> Expresiones { get; set; }
+
         /// <summary>El WHERE (sin la palabra), con parámetros @nombre; null para todas las filas.</summary>
         public string Condicion { get; set; }
 

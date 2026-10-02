@@ -3,7 +3,7 @@ using S50APIService.Sage;
 
 namespace S50APIService.Api.Modelos
 {
-    public sealed class Articulo
+    public class Articulo
     {
         public string Codigo { get; set; }
         public string Nombre { get; set; }

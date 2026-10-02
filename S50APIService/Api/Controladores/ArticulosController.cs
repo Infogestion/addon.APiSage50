@@ -102,6 +102,80 @@ namespace S50APIService.Api.Controladores
             }
         }
 
+        /// <summary>
+        /// Permite obtener los stocks de un artículo por cada almacen
+        /// </summary>
+        [HttpGet]
+        [Route("{id}/stocks")]
+        [ResponseType(typeof(List<Stocks2>))]
+        public HttpResponseMessage GetStocks(string year, string id)
+        {
+            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Stocks2>(year, "stocks2", "LTRIM(RTRIM([ARTICULO])) = @id",
+                new Dictionary<string, string> { ["@id"] = WebUtility.UrlDecode(id).Trim() }));
+        }
+
+        /// <summary>
+        /// Permite obtener los stocks de un artículo por un almacen
+        /// </summary>
+        [HttpGet]
+        [Route("{id}/stocks/{almacen}")]
+        [ResponseType(typeof(List<Stocks2>))]
+        public HttpResponseMessage GetStocks(string year, string id, string almacen)
+        {
+            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Stocks2>(year, "stocks2",
+                "(LTRIM(RTRIM([ARTICULO])) = @id) AND (LTRIM(RTRIM([ALMACEN])) = @almacen)",
+                new Dictionary<string, string> { ["@id"] = WebUtility.UrlDecode(id).Trim(), ["@almacen"] = WebUtility.UrlDecode(almacen).Trim() }));
+        }
+
+        /// <summary>
+        /// Permite buscar artículos devolviendo su stock en el almacen solicitado
+        /// </summary>
+        [HttpGet]
+        [Route("{page:int}/{pagesize:int}/warehouse/{warehouse}")]
+        [ResponseType(typeof(List<ArticuloWithStock>))]
+        public HttpResponseMessage GetWithStockByWarehouse(string year, int page, int pagesize, string warehouse)
+        {
+            const string sinStock = "(((([s].[EMPRESA] IS NULL) OR ([s].[ARTICULO] IS NULL)) OR ([s].[TALLA] IS NULL)) OR ([s].[COLOR] IS NULL)) OR ([s].[ALMACEN] IS NULL)";
+            const string conStock = "(((([s].[EMPRESA] IS NOT NULL) AND ([s].[ARTICULO] IS NOT NULL)) AND ([s].[TALLA] IS NOT NULL)) AND ([s].[COLOR] IS NOT NULL)) AND ([s].[ALMACEN] IS NOT NULL)";
+            try
+            {
+                return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<ArticuloWithStock>(year, Pagina(new Consulta
+                {
+                    Origen = Tabla + " LEFT JOIN {stocks2} AS [s] ON [a].[CODIGO] = [s].[ARTICULO]",
+                    Alias = "a",
+                    Expresiones = new Dictionary<string, string> { ["STOCKBYALMACEN"] = "CASE WHEN " + conStock + " THEN [s].[FINAL] ELSE 0.0 END" },
+                    Condicion = "(" + sinStock + ") OR (LTRIM(RTRIM([s].[ALMACEN])) = @almacen)",
+                    Parametros = new Dictionary<string, string> { ["@almacen"] = WebUtility.UrlDecode(warehouse).Trim() },
+                }, page, pagesize)));
+            }
+            catch (EjercicioNoEncontradoException)
+            {
+                // interface.s50c no pasa aquí por su Repository: el ejercicio inexistente llega como este error de EF.
+                return Respuestas.ErrorInterno("An exception has been raised that is likely due to a transient failure. "
+                    + "Consider enabling transient error resiliency by adding 'EnableRetryOnFailure' to the 'UseSqlServer' call.");
+            }
+            catch (ErrorSqlException ex)
+            {
+                return Respuestas.ErrorInterno(ex.MensajeSql);
+            }
+        }
+
+        /// <summary>
+        /// Permite obtener las series de un artículo y un almacén concreto disponibles
+        /// </summary>
+        [HttpGet]
+        [Route("series/{articulo}/{almacen}/{page:int}/{pagesize:int}")]
+        [ResponseType(typeof(List<Compras>))]
+        public HttpResponseMessage GetSeries(string year, string articulo, string almacen, int page, int pagesize)
+        {
+            return Respuestas.JsonBloques(Contexto.Lector.LeerJson<Compras>("COMUNES", Pagina(new Consulta
+            {
+                Origen = "{compras}",
+                Condicion = "((LTRIM(RTRIM([ARTICULO])) = @articulo) AND (LTRIM(RTRIM([ALMACEN])) = @almacen)) AND (UPPER(LTRIM(RTRIM([BAJA]))) <> 'S')",
+                Parametros = new Dictionary<string, string> { ["@articulo"] = articulo.Trim(), ["@almacen"] = almacen.Trim() },
+            }, page, pagesize)));
+        }
+
         private static Consulta Articulos(string condicion = null, Dictionary<string, string> parametros = null)
         {
             return new Consulta { Origen = Tabla, Alias = "a", Condicion = condicion, Parametros = parametros };

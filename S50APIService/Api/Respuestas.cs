@@ -66,6 +66,16 @@ namespace S50APIService.Api
                 "One or more validation errors occurred.", new Dictionary<string, string[]>(), "The db for the requested year does not exist");
         }
 
+        /// <summary>
+        /// ValidationProblem(ex.Message, null, 500) de interface.s50c: el 500 de las acciones que capturan cualquier excepción
+        /// y devuelven su mensaje en "detail".
+        /// </summary>
+        public static HttpResponseMessage ErrorInterno(string detalle)
+        {
+            return Problema(HttpStatusCode.InternalServerError, "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+                "One or more validation errors occurred.", new Dictionary<string, string[]>(), detalle);
+        }
+
         private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null, string detalle = null)
         {
             var problema = new Dictionary<string, object>

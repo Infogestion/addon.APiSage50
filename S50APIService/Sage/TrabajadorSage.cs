@@ -117,7 +117,10 @@ namespace S50APIService.Sage
             bool sinFilas = consulta.Tomar == 0;
             string condicion = sinFilas ? "0 = 1" : consulta.Condicion;
             string prefijo = consulta.Alias == null ? "" : "[" + consulta.Alias + "].";
-            string sql = "SELECT " + string.Join(", ", columnas.Select(c => prefijo + "[" + c + "]"))
+            string Columna(string c) => consulta.Expresiones != null && consulta.Expresiones.TryGetValue(c, out string expresion)
+                ? expresion + " AS [" + c + "]"
+                : prefijo + "[" + c + "]";
+            string sql = "SELECT " + string.Join(", ", columnas.Select(Columna))
                 + " FROM " + Regex.Replace(consulta.Origen, @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value))
                 + (condicion == null ? "" : " WHERE " + condicion);
             var consultaParametros = sinFilas ? new List<DB.QueryParams>() : (consulta.Parametros ?? new Dictionary<string, string>())
@@ -130,8 +133,19 @@ namespace S50APIService.Sage
             }
             var datos = new DataTable();
             if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
-                throw new InvalidOperationException($"Sage no ha podido ejecutar \"{sql}\": {DB.Error_Message}");
+                throw new ErrorSqlException(MensajeError(), sql);
             return datos;
+        }
+
+        /// <summary>
+        /// El mensaje de SQL Server del último error. Sage lo guarda entre comillas en Error_Message; sin ellas está en
+        /// la excepción, que solo se usa si es la de ese mismo error.
+        /// </summary>
+        private static string MensajeError()
+        {
+            string mensaje = DB.Error_Message ?? "";
+            string original = DB.Error_Message_Exception?.Message;
+            return !string.IsNullOrEmpty(original) && mensaje.Contains(original) ? original : mensaje;
         }
 
         /// <summary>
@@ -152,6 +166,7 @@ namespace S50APIService.Sage
         private static T EnSage<T>(Func<T> accion)
         {
             try { return accion(); }
+            catch (ErrorSqlException) { throw; }
             catch (Exception ex)
             {
                 var e = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;

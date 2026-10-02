@@ -54,6 +54,7 @@ namespace S50APIService.Api
             {
                 SchemaType = NJsonSchema.SchemaType.OpenApi3,
                 SerializerOptions = FormateadorJson.Opciones,
+                FlattenInheritanceHierarchy = true,
             };
         }
 

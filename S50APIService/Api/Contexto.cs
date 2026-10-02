@@ -11,5 +11,8 @@ namespace S50APIService.Api
         public static ServicioJwt Jwt { get; set; }
         public static UsuariosApi Usuarios { get; set; }
         public static UsuariosNadilux UsuariosNadilux { get; set; }
+
+        /// <summary>Nombre con el que Sage conoce al addon Nadilux SGA (SageAddonSga en App.config).</summary>
+        public static string AddonSga { get; set; }
     }
 }
