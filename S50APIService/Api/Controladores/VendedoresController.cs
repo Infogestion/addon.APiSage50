@@ -1,12 +1,10 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Web.Http;
 using System.Web.Http.Description;
 using S50APIService.Api.Autenticacion;
 using S50APIService.Api.Modelos;
+using S50APIService.Servicios;
 
 namespace S50APIService.Api.Controladores
 {
@@ -15,12 +13,6 @@ namespace S50APIService.Api.Controladores
     public sealed class VendedoresController : ApiController
     {
         /// <summary>
-        /// Los vendedores están en la base de datos del ejercicio, pero la ruta no lleva {year}:
-        /// interface.s50c usa el año en curso.
-        /// </summary>
-        private static string Ejercicio => DateTime.Now.Year.ToString();
-
-        /// <summary>
         /// Permite obtener todos los Vendedores
         /// </summary>
         [HttpGet]
@@ -28,7 +20,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(List<Vendedor>))]
         public HttpResponseMessage Get()
         {
-            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Vendedor>(Ejercicio, "vendedor"));
+            return Respuestas.Json(VendedorService.Select());
         }
 
         /// <summary>
@@ -37,14 +29,9 @@ namespace S50APIService.Api.Controladores
         [HttpGet]
         [Route("ByCode")]
         [ResponseType(typeof(Vendedor))]
-        public HttpResponseMessage GetByCode(string code = null)
+        public HttpResponseMessage GetByCode([Obligatorio] string code = null)
         {
-            if (string.IsNullOrWhiteSpace(code))
-                return Respuestas.ErrorValidacion(new Dictionary<string, string[]> { ["code"] = new[] { "The code field is required." } });
-
-            var vendedor = Contexto.Lector.LeerEjercicio<Vendedor>(Ejercicio, "vendedor", "LTRIM(RTRIM([CODIGO])) = @code",
-                new Dictionary<string, string> { ["@code"] = code.Trim() }).FirstOrDefault();
-            return vendedor == null ? Request.CreateResponse(HttpStatusCode.NoContent) : Respuestas.Json(vendedor);
+            return Respuestas.JsonONada(VendedorService.Select(code));
         }
     }
 }

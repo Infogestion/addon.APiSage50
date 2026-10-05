@@ -38,10 +38,10 @@ namespace S50APIService.Api
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
         }
 
-        /// <summary>Como <see cref="Json"/>, con el JSON ya escrito en bloques (los listados de <see cref="Sage.LectorSage.LeerJson{T}(string, Sage.Consulta)"/>).</summary>
-        public static HttpResponseMessage JsonBloques(List<byte[]> bloques)
+        /// <summary>Como <see cref="Json(object)"/>, con el JSON ya escrito (los listados de <see cref="Sage.LectorSage.LeerJson{T}(string, Sage.Consulta)"/>).</summary>
+        public static HttpResponseMessage Json(Sage.ListaJson lista)
         {
-            var contenido = new ContenidoBloques(bloques);
+            var contenido = new ContenidoBloques(lista.Bloques);
             contenido.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = contenido };
         }
@@ -74,6 +74,12 @@ namespace S50APIService.Api
         {
             return Problema(HttpStatusCode.InternalServerError, "https://tools.ietf.org/html/rfc7231#section-6.6.1",
                 "One or more validation errors occurred.", new Dictionary<string, string[]>(), detalle);
+        }
+
+        /// <summary>Ok(valor) de ASP.NET Core: el valor como JSON o, si es null, 204 sin cuerpo.</summary>
+        public static HttpResponseMessage JsonONada(object valor)
+        {
+            return valor == null ? new HttpResponseMessage(HttpStatusCode.NoContent) : Json(valor);
         }
 
         private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null, string detalle = null)

@@ -1,12 +1,10 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Web.Http;
 using System.Web.Http.Description;
 using S50APIService.Api.Autenticacion;
 using S50APIService.Api.Modelos;
+using S50APIService.Servicios;
 
 namespace S50APIService.Api.Controladores
 {
@@ -15,12 +13,6 @@ namespace S50APIService.Api.Controladores
     public sealed class ProveedoresController : ApiController
     {
         /// <summary>
-        /// Los proveedores están en la base de datos del ejercicio, pero la ruta no lleva {year}:
-        /// interface.s50c usa el año en curso.
-        /// </summary>
-        private static string Ejercicio => DateTime.Now.Year.ToString();
-
-        /// <summary>
         /// Permite obtener todos los Proveedores
         /// </summary>
         [HttpGet]
@@ -28,7 +20,8 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(List<Proveed>))]
         public HttpResponseMessage Get(int page = 1, int pageSize = 100)
         {
-            return Respuestas.JsonBloques(Contexto.Lector.LeerEjercicioJson<Proveed>(Ejercicio, "proveed"));
+            // interface.s50c recibe la página pero no pagina: devuelve siempre todos.
+            return Respuestas.Json(ProveedoresService.Select());
         }
 
         /// <summary>
@@ -37,14 +30,9 @@ namespace S50APIService.Api.Controladores
         [HttpGet]
         [Route("ByCode")]
         [ResponseType(typeof(Proveed))]
-        public HttpResponseMessage GetByCode(string code = null)
+        public HttpResponseMessage GetByCode([Obligatorio] string code = null)
         {
-            if (string.IsNullOrWhiteSpace(code))
-                return Respuestas.ErrorValidacion(new Dictionary<string, string[]> { ["code"] = new[] { "The code field is required." } });
-
-            var proveedor = Contexto.Lector.LeerEjercicio<Proveed>(Ejercicio, "proveed", "LTRIM(RTRIM([CODIGO])) = @code",
-                new Dictionary<string, string> { ["@code"] = code.Trim() }).FirstOrDefault();
-            return proveedor == null ? Request.CreateResponse(HttpStatusCode.NoContent) : Respuestas.Json(proveedor);
+            return Respuestas.JsonONada(ProveedoresService.Select(code));
         }
     }
 }

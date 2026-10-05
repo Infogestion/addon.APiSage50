@@ -41,6 +41,7 @@ namespace S50APIService
             {
                 Contexto.Sesion = sesion;
                 Contexto.Lector = new LectorSage(sesion, timeout);
+                Contexto.Escritor = new EscritorSage(sesion, timeout);
                 Contexto.UsuariosNadilux = new UsuariosNadilux(sesion, timeout);
                 var sw = Stopwatch.StartNew();
                 try

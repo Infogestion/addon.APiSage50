@@ -121,8 +121,8 @@ namespace S50APIService.Sage
                 ? expresion + " AS [" + c + "]"
                 : prefijo + "[" + c + "]";
             string sql = "SELECT " + string.Join(", ", columnas.Select(Columna))
-                + " FROM " + Regex.Replace(consulta.Origen, @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value))
-                + (condicion == null ? "" : " WHERE " + condicion);
+                + Regex.Replace(" FROM " + consulta.Origen + (condicion == null ? "" : " WHERE " + condicion),
+                    @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value));
             var consultaParametros = sinFilas ? new List<DB.QueryParams>() : (consulta.Parametros ?? new Dictionary<string, string>())
                 .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
             if (consulta.Saltar != null && !sinFilas)
@@ -135,6 +135,68 @@ namespace S50APIService.Sage
             if (!DB.SQLExecParams(sql, ref datos, consultaParametros))
                 throw new ErrorSqlException(MensajeError(), sql);
             return datos;
+        }
+
+        /// <summary>
+        /// Ejecuta una instrucción que no devuelve filas (INSERT, UPDATE...) y devuelve cuántas ha cambiado. Solo para las
+        /// tablas que no tienen clase de negocio en Sage. Las tablas van entre llaves, como en <see cref="Consulta.Origen"/>,
+        /// y los valores en <paramref name="parametros"/>, como en <see cref="LeerTabla"/>.
+        /// </summary>
+        public int Ejecutar(string baseDatos, string sql, Dictionary<string, string> parametros = null)
+        {
+            return EnSage(() =>
+            {
+                string instruccion = Regex.Replace(sql, @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value));
+                var lista = (parametros ?? new Dictionary<string, string>())
+                    .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
+                if (!DB.SQLExecParams(instruccion, out int filas, lista))
+                    throw new ErrorSqlException(MensajeError(), instruccion);
+                return filas;
+            });
+        }
+
+        /// <summary>
+        /// Cambia la cabecera de un documento del addon GESTIONMERC (tabla c_doc) con su clase de negocio, Documento: lo
+        /// carga, asigna las propiedades de <paramref name="cambios"/> (p. ej. "_Comments") y lo guarda. Devuelve null si se
+        /// ha guardado y, si no, el motivo. La clase se usa sin compilar contra la librería del addon, que puede no estar.
+        /// </summary>
+        public string GuardarDocumentoMercancia(string ejercicio, string empresa, string numero, Dictionary<string, string> cambios)
+        {
+            return EnSage(() =>
+            {
+                var tipo = TipoDeAddon("sage.addons.GestionMerc", "sage.addons.GestionMerc.Negocio.Documentos.Documento");
+                dynamic documento = Activator.CreateInstance(tipo);
+                documento._Empresa = empresa;
+                documento._Numero = numero;
+                documento._Ejercicio = ejercicio;
+                if (!documento._Existe_Registro())
+                    return "No se encontró el documento.";
+
+                documento._Load();
+                if (documento._EnUso)
+                    return "El documento está abierto en Sage: no se ha guardado.";
+                try
+                {
+                    foreach (var cambio in cambios)
+                        tipo.GetProperty(cambio.Key).SetValue(documento, cambio.Value);
+                    if (documento._Save())
+                        return null;
+                    string motivo = Convert.ToString(documento._Mensaje_Error);
+                    return string.IsNullOrWhiteSpace(motivo) ? "Sage no ha guardado el documento." : motivo;
+                }
+                finally
+                {
+                    documento._Bloquear_Documento(false);
+                }
+            });
+        }
+
+        /// <summary>La clase de un addon de Sage: de la librería que ya tenga cargada Sage o, si no, de su carpeta de librerías.</summary>
+        private static Type TipoDeAddon(string libreria, string clase)
+        {
+            var ensamblado = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => string.Equals(a.GetName().Name, libreria, StringComparison.OrdinalIgnoreCase)) ?? Assembly.Load(libreria);
+            return ensamblado.GetType(clase, true);
         }
 
         /// <summary>

@@ -24,11 +24,29 @@ namespace S50APIService.Sage
         /// </summary>
         public Dictionary<string, string> Expresiones { get; set; }
 
-        /// <summary>El WHERE (sin la palabra), con parámetros @nombre; null para todas las filas.</summary>
+        /// <summary>El WHERE (sin la palabra), con parámetros @nombre y las tablas entre llaves; null para todas las filas.</summary>
         public string Condicion { get; set; }
 
         /// <summary>Valores de los parámetros de <see cref="Condicion"/>; se envían a SQL Server como varchar.</summary>
         public Dictionary<string, string> Parametros { get; set; }
+
+        /// <summary>Pone <see cref="Condicion"/> y <see cref="Parametros"/> con los de un <see cref="Sage.Filtro"/>.</summary>
+        public Filtro Filtro
+        {
+            set
+            {
+                Condicion = value?.Condicion;
+                Parametros = value?.Parametros;
+            }
+        }
+
+        /// <summary>El Skip(pagesize * (page - 1)).Take(pagesize) de interface.s50c, con su mismo desbordamiento de int.</summary>
+        public Consulta Pagina(int page, int pagesize)
+        {
+            Saltar = unchecked(pagesize * (page - 1));
+            Tomar = pagesize;
+            return this;
+        }
 
         /// <summary>Filas que se saltan (Skip de EF); null si no se pagina. Va siempre con <see cref="Tomar"/>.</summary>
         public int? Saltar { get; set; }

@@ -1,11 +1,10 @@
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Web.Http;
 using System.Web.Http.Description;
 using S50APIService.Api.Autenticacion;
 using S50APIService.Api.Modelos;
+using S50APIService.Servicios;
 
 namespace S50APIService.Api.Controladores
 {
@@ -25,7 +24,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(List<Ejercici>))]
         public HttpResponseMessage Get()
         {
-            return Respuestas.JsonBloques(Contexto.Lector.LeerJson<Ejercici>("COMUNES", "ejercici"));
+            return Respuestas.Json(EjercicioService.Select());
         }
 
         /// <summary>
@@ -36,10 +35,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(Ejercici))]
         public HttpResponseMessage GetDefault()
         {
-            var predeterminado = Contexto.Lector.Leer<Ejercici>("COMUNES", "ejercici").FirstOrDefault(e => e.Predet);
-            return predeterminado == null
-                ? Request.CreateResponse(HttpStatusCode.NoContent)
-                : Respuestas.Json(predeterminado);
+            return Respuestas.JsonONada(EjercicioService.SelectDefault());
         }
     }
 }

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Web.Http;
 using S50APIService.Api.Autenticacion;
@@ -7,6 +5,11 @@ using S50APIService.Api.Modelos;
 
 namespace S50APIService.Api.Controladores
 {
+    /// <summary>
+    /// Los usuarios y los tokens están en la carpeta Seguridad: <see cref="Seguridad.UsuariosApi"/> y
+    /// <see cref="Seguridad.ServicioJwt"/> hacen de AuthenticationService de interface.s50c, y
+    /// <see cref="Seguridad.UsuariosNadilux"/> de los login de ConductorService y OperariosService.
+    /// </summary>
     public sealed class AuthenticationController : ApiController
     {
         /// <summary>GetToken</summary>
@@ -24,7 +27,7 @@ namespace S50APIService.Api.Controladores
         [Route("api/nadilux-repartos/{business}/token")]
         public HttpResponseMessage GetTokenAppNadiluxRepartos([FromBody] LoginNadRepartosRequest request, string business)
         {
-            var invalido = ValidarLogin(request);
+            var invalido = ValidacionLogin.Error(request, ModelState);
             if (invalido != null)
                 return invalido;
 
@@ -73,7 +76,7 @@ namespace S50APIService.Api.Controladores
         [Route("api/nadilux-mercancias/{business}/token")]
         public HttpResponseMessage GetTokenOperarioGestionMercancia([FromBody] LoginNadRepartosRequest request, string business)
         {
-            var invalido = ValidarLogin(request);
+            var invalido = ValidacionLogin.Error(request, ModelState);
             if (invalido != null)
                 return invalido;
 
@@ -81,46 +84,6 @@ namespace S50APIService.Api.Controladores
             if (codigo == null)
                 return Respuestas.NoAutorizado();
             return Respuestas.Json(new { token = Contexto.Jwt.GenerarTokenNadilux(request.Username, business), operarioCode = codigo });
-        }
-
-        /// <summary>
-        /// La validación automática de ASP.NET Core: con Nullable activado en interface.s50c, el cuerpo y sus dos campos
-        /// son obligatorios: solo falla si faltan (null), porque el [Required] implícito admite textos vacíos.
-        /// Los errores van en el mismo orden que allí: sin cuerpo, "" y "request"; con JSON no válido, "request" y la ruta
-        /// del error (FormateadorJson la deja en el ModelState como "request.$..."), salvo si es la raíz "$", que va antes.
-        /// Null = válido.
-        /// </summary>
-        private HttpResponseMessage ValidarLogin(LoginNadRepartosRequest request)
-        {
-            var errores = new Dictionary<string, string[]>();
-            if (request == null)
-            {
-                var errorJson = ModelState.FirstOrDefault(e => e.Value.Errors.Count > 0);
-                if (errorJson.Key == null)
-                {
-                    errores[""] = new[] { "A non-empty request body is required." };
-                    errores["request"] = new[] { "The request field is required." };
-                }
-                else
-                {
-                    string ruta = errorJson.Key.StartsWith("request.") ? errorJson.Key.Substring("request.".Length) : errorJson.Key;
-                    var mensajes = errorJson.Value.Errors.Select(e => e.ErrorMessage).ToArray();
-                    bool enRaiz = ruta.IndexOfAny(new[] { '.', '[' }) < 0;
-                    if (enRaiz)
-                        errores[ruta] = mensajes;
-                    errores["request"] = new[] { "The request field is required." };
-                    if (!enRaiz)
-                        errores[ruta] = mensajes;
-                }
-            }
-            else
-            {
-                if (request.Password == null)
-                    errores["Password"] = new[] { "The Password field is required." };
-                if (request.Username == null)
-                    errores["Username"] = new[] { "The Username field is required." };
-            }
-            return errores.Count == 0 ? null : Respuestas.ErrorValidacion(errores);
         }
     }
 }

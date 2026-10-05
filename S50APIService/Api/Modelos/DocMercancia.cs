@@ -42,6 +42,20 @@ namespace S50APIService.Api.Modelos
 
     public sealed class DDocMercanciaExt : DDoc
     {
+        public DDocMercanciaExt(DDoc linea)
+        {
+            EJERCICIO = linea.EJERCICIO;
+            EMPRESA = linea.EMPRESA;
+            NUMERO = linea.NUMERO;
+            LINEA = linea.LINEA;
+            ARTICULO = linea.ARTICULO;
+            REC = linea.REC;
+            PTE = linea.PTE;
+            GUID_ID = linea.GUID_ID;
+            CREATED = linea.CREATED;
+            MODIFIED = linea.MODIFIED;
+        }
+
         public string ArticuloNombre { get; set; }
         public string ArticuloCodigoBarras { get; set; }
         public string ArticuloProveedor { get; set; }
@@ -60,6 +74,34 @@ namespace S50APIService.Api.Modelos
     {
         public string Articulo { get; set; }
         public string Unidades { get; set; }
+    }
+
+    /// <summary>Lo que responden las escrituras de interface.s50c, siempre con 200: si se ha guardado y un mensaje.</summary>
+    public sealed class ResultadoEscritura
+    {
+        public const string Actualizado = "Actualizado con éxito";
+        public const string ErrorAlGuardar = "An error occurred while saving the entity changes. See the inner exception for details.";
+
+        public bool Result { get; }
+        public string Message { get; }
+
+        private ResultadoEscritura(bool result, string message)
+        {
+            Result = result;
+            Message = message;
+        }
+
+        public static ResultadoEscritura Guardado() => new ResultadoEscritura(true, Actualizado);
+        public static ResultadoEscritura Error(string mensaje) => new ResultadoEscritura(false, mensaje);
+    }
+
+    /// <summary>La clave de una fila de alma_envio, tal como está guardada (con sus espacios).</summary>
+    public sealed class AlmaEnvio
+    {
+        public string Ejercicio { get; set; }
+        public string Empresa { get; set; }
+        public string Numero { get; set; }
+        public string Articulo { get; set; }
     }
 
     /// <summary>Lo que se necesita de un albarán de compra (c_albcom) para saber su proveedor.</summary>

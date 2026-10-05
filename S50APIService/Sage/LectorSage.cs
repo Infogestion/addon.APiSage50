@@ -54,6 +54,9 @@ namespace S50APIService.Sage
     /// <summary>
     /// Lee tablas de Sage y las convierte en objetos de los modelos de la API (equivale a los DbSet de EF en interface.s50c).
     /// Cada propiedad pública del modelo es una columna: su nombre en mayúsculas, o el de <see cref="ColumnaAttribute"/>.
+    /// Hay cuatro lecturas, y cada una admite una tabla con un <see cref="Filtro"/> o una <see cref="Consulta"/>:
+    /// Leer (objetos) y LeerJson (el JSON ya escrito, para los listados), y sus variantes LeerEjercicio y LeerEjercicioJson,
+    /// que antes comprueban que la base de datos existe.
     /// </summary>
     public sealed class LectorSage
     {
@@ -67,15 +70,16 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Las filas de <paramref name="tabla"/> que cumplen <paramref name="condicion"/> (todas si es null), en el orden en que
-        /// las devuelve SQL Server (como EF sin OrderBy). Ver <see cref="TrabajadorSage.LeerTabla"/> para la condición y sus parámetros.
+        /// Las filas de <paramref name="tabla"/> que cumplen <paramref name="filtro"/> (todas si es null), en el orden en que
+        /// las devuelve SQL Server (como EF sin OrderBy). <paramref name="baseDatos"/> es el nombre con el que Sage la conoce
+        /// ("COMUNES", "2026", o el de un addon como "GESTIONMERC").
         /// </summary>
-        public List<T> Leer<T>(string baseDatos, string tabla, string condicion = null, Dictionary<string, string> parametros = null) where T : new()
+        public List<T> Leer<T>(string baseDatos, string tabla, Filtro filtro = null) where T : new()
         {
-            return Leer<T>(baseDatos, DeTabla(tabla, condicion, parametros));
+            return Leer<T>(baseDatos, DeTabla(tabla, filtro));
         }
 
-        /// <summary>Como <see cref="Leer{T}(string, string, string, Dictionary{string, string})"/>, con las uniones y la paginación de <paramref name="consulta"/>.</summary>
+        /// <summary>Como <see cref="Leer{T}(string, string, Filtro)"/>, con las uniones y la paginación de <paramref name="consulta"/>.</summary>
         public List<T> Leer<T>(string baseDatos, Consulta consulta) where T : new()
         {
             var propiedades = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanWrite).ToArray();
@@ -95,12 +99,13 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Como <see cref="Leer{T}(string, Consulta)"/>, pero de la base de datos del ejercicio <paramref name="ejercicio"/> (el {year} de las rutas).
+        /// Como <see cref="Leer{T}(string, string, Filtro)"/>, pero de la base de datos del ejercicio <paramref name="ejercicio"/> (el {year} de las rutas).
         /// Si no existe, lanza <see cref="EjercicioNoEncontradoException"/>, que la API convierte en el 404 de interface.s50c.
+        /// También vale para la base de datos de un addon que puede no estar instalado.
         /// </summary>
-        public List<T> LeerEjercicio<T>(string ejercicio, string tabla, string condicion = null, Dictionary<string, string> parametros = null) where T : new()
+        public List<T> LeerEjercicio<T>(string ejercicio, string tabla, Filtro filtro = null) where T : new()
         {
-            return LeerEjercicio<T>(ejercicio, DeTabla(tabla, condicion, parametros));
+            return LeerEjercicio<T>(ejercicio, DeTabla(tabla, filtro));
         }
 
         public List<T> LeerEjercicio<T>(string ejercicio, Consulta consulta) where T : new()
@@ -110,15 +115,15 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Las mismas filas que <see cref="Leer{T}(string, Consulta)"/>, ya como JSON (el array de modelos <typeparamref name="T"/>) en bloques de bytes.
-        /// Para los listados: el JSON se escribe dentro de Sage y no se crea un objeto por fila.
+        /// Las mismas filas que <see cref="Leer{T}(string, string, Filtro)"/>, ya escritas como JSON. Para los listados: el JSON
+        /// se escribe dentro de Sage y no se crea un objeto por fila.
         /// </summary>
-        public List<byte[]> LeerJson<T>(string baseDatos, string tabla, string condicion = null, Dictionary<string, string> parametros = null)
+        public ListaJson LeerJson<T>(string baseDatos, string tabla, Filtro filtro = null)
         {
-            return LeerJson<T>(baseDatos, DeTabla(tabla, condicion, parametros));
+            return LeerJson<T>(baseDatos, DeTabla(tabla, filtro));
         }
 
-        public List<byte[]> LeerJson<T>(string baseDatos, Consulta consulta)
+        public ListaJson LeerJson<T>(string baseDatos, Consulta consulta)
         {
             var campos = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanWrite).Select(p => new CampoJson
             {
@@ -133,7 +138,7 @@ namespace S50APIService.Sage
             {
                 _sesion.Ejecutar(t => { t.EscribirConsultaJson(baseDatos, consulta, campos, destino); return 0; },
                     _timeout, $"leer {baseDatos}: {consulta.Origen}");
-                return destino.Tomar();
+                return new ListaJson(destino.Tomar());
             }
             finally
             {
@@ -141,21 +146,21 @@ namespace S50APIService.Sage
             }
         }
 
-        /// <summary>Como <see cref="LeerJson{T}(string, Consulta)"/>, pero del ejercicio <paramref name="ejercicio"/> (ver <see cref="LeerEjercicio{T}(string, Consulta)"/>).</summary>
-        public List<byte[]> LeerEjercicioJson<T>(string ejercicio, string tabla, string condicion = null, Dictionary<string, string> parametros = null)
+        /// <summary>Como <see cref="LeerJson{T}(string, string, Filtro)"/>, pero del ejercicio <paramref name="ejercicio"/> (ver <see cref="LeerEjercicio{T}(string, string, Filtro)"/>).</summary>
+        public ListaJson LeerEjercicioJson<T>(string ejercicio, string tabla, Filtro filtro = null)
         {
-            return LeerEjercicioJson<T>(ejercicio, DeTabla(tabla, condicion, parametros));
+            return LeerEjercicioJson<T>(ejercicio, DeTabla(tabla, filtro));
         }
 
-        public List<byte[]> LeerEjercicioJson<T>(string ejercicio, Consulta consulta)
+        public ListaJson LeerEjercicioJson<T>(string ejercicio, Consulta consulta)
         {
             ComprobarEjercicio(ejercicio);
             return LeerJson<T>(ejercicio, consulta);
         }
 
-        private static Consulta DeTabla(string tabla, string condicion, Dictionary<string, string> parametros)
+        private static Consulta DeTabla(string tabla, Filtro filtro)
         {
-            return new Consulta { Origen = "{" + tabla + "}", Condicion = condicion, Parametros = parametros };
+            return new Consulta { Origen = "{" + tabla + "}", Filtro = filtro };
         }
 
         private void ComprobarEjercicio(string ejercicio)
