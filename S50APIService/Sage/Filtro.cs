@@ -43,11 +43,14 @@ namespace S50APIService.Sage
             return Sql(Columna(columna) + " = " + Parametro(valor));
         }
 
-        /// <summary>La columna, sin los espacios de alrededor, es uno de los valores. Con una lista vacía no hay filas.</summary>
+        /// <summary>
+        /// La columna, sin los espacios de alrededor, es uno de los valores. Con una lista vacía no hay filas. Los valores
+        /// van escritos en la consulta, como hace EF, porque SQL Server no admite más de 2.100 parámetros.
+        /// </summary>
         public Filtro En(string columna, IEnumerable<string> valores)
         {
-            var parametros = valores.Select(v => Parametro(v.Trim())).ToList();
-            return Sql(parametros.Count == 0 ? "0 = 1" : Recortada(columna) + " IN (" + string.Join(", ", parametros) + ")");
+            var textos = valores.Select(v => "'" + v.Trim().Replace("'", "''") + "'").ToList();
+            return Sql(textos.Count == 0 ? "0 = 1" : Recortada(columna) + " IN (" + string.Join(", ", textos) + ")");
         }
 
         /// <summary>La columna contiene el texto, sin distinguir mayúsculas (x.ToLower() LIKE '%texto%').</summary>

@@ -24,11 +24,11 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.Ejecutar(baseDatos, sql, parametros), _timeout, $"escribir en {baseDatos}: {sql}");
         }
 
-        /// <summary>Ver <see cref="TrabajadorSage.GuardarDocumentoMercancia"/>.</summary>
-        public string GuardarDocumentoMercancia(string ejercicio, string empresa, string numero, Dictionary<string, string> cambios)
+        /// <summary>Ver <see cref="TrabajadorSage.GuardarDocumento"/>.</summary>
+        public string GuardarDocumento(CambiosDocumento cambios)
         {
-            return _sesion.Ejecutar(t => t.GuardarDocumentoMercancia(ejercicio, empresa, numero, cambios), _timeout,
-                $"guardar el documento de mercancías {ejercicio}/{empresa}/{numero}");
+            return _sesion.Ejecutar(t => t.GuardarDocumento(cambios), _timeout,
+                $"guardar el documento {cambios.Clase} {cambios.Ejercicio}/{cambios.Empresa}/{cambios.Numero}");
         }
     }
 }

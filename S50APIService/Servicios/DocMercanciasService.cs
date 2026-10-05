@@ -152,7 +152,15 @@ namespace S50APIService.Servicios
                 if (state.Trim().Length > 20)
                     return ResultadoEscritura.Error(ResultadoEscritura.ErrorAlGuardar);
 
-                string motivo = Contexto.Escritor.GuardarDocumentoMercancia(documento.EJERCICIO.Trim(), documento.EMPRESA.Trim(), documento.NUMERO.Trim(), cambios);
+                string motivo = Contexto.Escritor.GuardarDocumento(new CambiosDocumento
+                {
+                    Libreria = "sage.addons.GestionMerc",
+                    Clase = "sage.addons.GestionMerc.Negocio.Documentos.Documento",
+                    Ejercicio = documento.EJERCICIO.Trim(),
+                    Empresa = documento.EMPRESA.Trim(),
+                    Numero = documento.NUMERO.Trim(),
+                    Cabecera = cambios,
+                });
                 return motivo == null ? ResultadoEscritura.Guardado() : ResultadoEscritura.Error(motivo);
             }
             catch (Exception ex)

@@ -40,6 +40,9 @@ namespace S50APIService.Sage
             }
         }
 
+        /// <summary>Columna por la que se ordena (el OrderBy de EF); null para el orden en que las devuelva SQL Server.</summary>
+        public string Orden { get; set; }
+
         /// <summary>El Skip(pagesize * (page - 1)).Take(pagesize) de interface.s50c, con su mismo desbordamiento de int.</summary>
         public Consulta Pagina(int page, int pagesize)
         {

@@ -20,7 +20,7 @@ namespace S50APIService.Api
 
     /// <summary>
     /// Valida los parámetros de las acciones como un [ApiController] de ASP.NET Core y responde su mismo 400:
-    /// los int y las fechas de la query (p. ej. page, pageSize o fecha) que no se pueden convertir, con
+    /// los int, los decimal y las fechas de la query (p. ej. page, pageSize o fecha) que no se pueden convertir, con
     /// "The value 'x' is not valid." (o "is invalid." si viene vacío), en vez de seguir con el valor por defecto como hace
     /// Web API 2; y los textos en blanco, con "The x field is required.", si son de la ruta o llevan <see cref="ObligatorioAttribute"/>.
     /// Un texto opcional en blanco llega a la acción como null. Si un int o una fecha se repite se convierte el primer valor,
@@ -34,6 +34,7 @@ namespace S50APIService.Api
         private static readonly Dictionary<Type, Func<string, object>> Conversores = new Dictionary<Type, Func<string, object>>
         {
             [typeof(int)] = valor => ConversorInt.ConvertFrom(null, CultureInfo.InvariantCulture, valor),
+            [typeof(decimal)] = valor => decimal.Parse(valor, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture),
             [typeof(DateTime)] = valor => DateTime.Parse(valor, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces),
         };
 

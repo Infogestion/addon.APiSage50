@@ -125,9 +125,14 @@ namespace S50APIService.Sage
                     @"\{(\w+)\}", m => DB.SQLDatabase(baseDatos, m.Groups[1].Value));
             var consultaParametros = sinFilas ? new List<DB.QueryParams>() : (consulta.Parametros ?? new Dictionary<string, string>())
                 .Select(p => new DB.QueryParams(p.Key, p.Value, SqlDbType.VarChar)).ToList();
-            if (consulta.Saltar != null && !sinFilas)
+            bool paginada = consulta.Saltar != null && !sinFilas;
+            if (consulta.Orden != null)
+                sql += " ORDER BY " + prefijo + "[" + consulta.Orden + "]";
+            else if (paginada)
+                sql += " ORDER BY (SELECT 1)";
+            if (paginada)
             {
-                sql += " ORDER BY (SELECT 1) OFFSET @__saltar ROWS FETCH NEXT @__tomar ROWS ONLY";
+                sql += " OFFSET @__saltar ROWS FETCH NEXT @__tomar ROWS ONLY";
                 consultaParametros.Add(new DB.QueryParams("@__saltar", consulta.Saltar.Value.ToString(CultureInfo.InvariantCulture), SqlDbType.Int));
                 consultaParametros.Add(new DB.QueryParams("@__tomar", consulta.Tomar.GetValueOrDefault().ToString(CultureInfo.InvariantCulture), SqlDbType.Int));
             }
@@ -156,19 +161,20 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Cambia la cabecera de un documento del addon GESTIONMERC (tabla c_doc) con su clase de negocio, Documento: lo
-        /// carga, asigna las propiedades de <paramref name="cambios"/> (p. ej. "_Comments") y lo guarda. Devuelve null si se
-        /// ha guardado y, si no, el motivo. La clase se usa sin compilar contra la librería del addon, que puede no estar.
+        /// Cambia un documento de un addon con su clase de negocio (p. ej. Documento de GESTIONMERC, tablas c_doc y d_doc):
+        /// lo carga, asigna las propiedades de <paramref name="cambios"/> y lo guarda. Devuelve null si se ha guardado y, si
+        /// no, el motivo. La clase se usa sin compilar contra la librería del addon, que puede no estar.
         /// </summary>
-        public string GuardarDocumentoMercancia(string ejercicio, string empresa, string numero, Dictionary<string, string> cambios)
+        public string GuardarDocumento(CambiosDocumento cambios)
         {
             return EnSage(() =>
             {
-                var tipo = TipoDeAddon("sage.addons.GestionMerc", "sage.addons.GestionMerc.Negocio.Documentos.Documento");
+                var tipo = TipoDeAddon(cambios.Libreria, cambios.Clase);
                 dynamic documento = Activator.CreateInstance(tipo);
-                documento._Empresa = empresa;
-                documento._Numero = numero;
-                documento._Ejercicio = ejercicio;
+                // El número va el último: al asignarlo, Sage completa el ejercicio y la empresa que falten con los de la sesión.
+                documento._Ejercicio = cambios.Ejercicio;
+                documento._Empresa = cambios.Empresa;
+                documento._Numero = cambios.Numero;
                 if (!documento._Existe_Registro())
                     return "No se encontró el documento.";
 
@@ -177,8 +183,23 @@ namespace S50APIService.Sage
                     return "El documento está abierto en Sage: no se ha guardado.";
                 try
                 {
-                    foreach (var cambio in cambios)
+                    if (Convert.ToString(documento._Ejercicio).Trim() != cambios.Ejercicio || Convert.ToString(documento._Empresa).Trim() != cambios.Empresa
+                        || Convert.ToString(documento._Numero).Trim() != cambios.Numero)
+                        return "Sage ha cargado otro documento: no se ha guardado.";
+
+                    foreach (var cambio in cambios.Cabecera)
                         tipo.GetProperty(cambio.Key).SetValue(documento, cambio.Value);
+                    if (cambios.Linea != null)
+                    {
+                        object linea = null;
+                        foreach (dynamic candidata in documento._Detalle._Items)
+                            if (candidata._Linea == cambios.Linea.Value)
+                                linea = candidata;
+                        if (linea == null)
+                            return "No se encontró la línea del documento.";
+                        foreach (var cambio in cambios.DeLinea)
+                            linea.GetType().GetProperty(cambio.Key).SetValue(linea, cambio.Value);
+                    }
                     if (documento._Save())
                         return null;
                     string motivo = Convert.ToString(documento._Mensaje_Error);
