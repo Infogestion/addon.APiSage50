@@ -10,15 +10,32 @@ using System.Web.Http.Filters;
 namespace S50APIService.Api
 {
     /// <summary>
+    /// Marca un texto de la query como obligatorio (un string no anulable en interface.s50c). El parámetro se declara con
+    /// "= null": si no tuviera valor por defecto, Web API 2 respondería 404 cuando falta en vez de dejar validar.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class ObligatorioAttribute : Attribute
+    {
+    }
+
+    /// <summary>
     /// Valida los parámetros de las acciones como un [ApiController] de ASP.NET Core y responde su mismo 400:
-    /// los int de la query (p. ej. page y pageSize) que no son un entero, con "The value 'x' is not valid." (o "is invalid."
-    /// si viene vacío), en vez de seguir con el valor por defecto como hace Web API 2; y los textos de la ruta en blanco,
-    /// con "The x field is required.". Si un int se repite se convierte el primer valor, pero el mensaje los muestra todos.
+    /// los int y las fechas de la query (p. ej. page, pageSize o fecha) que no se pueden convertir, con
+    /// "The value 'x' is not valid." (o "is invalid." si viene vacío), en vez de seguir con el valor por defecto como hace
+    /// Web API 2; y los textos en blanco, con "The x field is required.", si son de la ruta o llevan <see cref="ObligatorioAttribute"/>.
+    /// Un texto opcional en blanco llega a la acción como null. Si un int o una fecha se repite se convierte el primer valor,
+    /// pero el mensaje los muestra todos.
     /// Los errores salen en el orden del ModelState de ASP.NET Core: por longitud del nombre y luego alfabético.
     /// </summary>
     public sealed class ValidacionParametros : ActionFilterAttribute
     {
-        private static readonly TypeConverter Conversor = TypeDescriptor.GetConverter(typeof(int));
+        private static readonly TypeConverter ConversorInt = TypeDescriptor.GetConverter(typeof(int));
+
+        private static readonly Dictionary<Type, Func<string, object>> Conversores = new Dictionary<Type, Func<string, object>>
+        {
+            [typeof(int)] = valor => ConversorInt.ConvertFrom(null, CultureInfo.InvariantCulture, valor),
+            [typeof(DateTime)] = valor => DateTime.Parse(valor, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces),
+        };
 
         public override void OnActionExecuting(HttpActionContext contexto)
         {
@@ -33,13 +50,19 @@ namespace S50APIService.Api
 
                 if (parametro.ParameterType == typeof(string))
                 {
-                    if (enRuta && string.IsNullOrWhiteSpace(ruta[nombre] as string))
+                    contexto.ActionArguments.TryGetValue(nombre, out object texto);
+                    if (!string.IsNullOrWhiteSpace(enRuta ? ruta[nombre] as string : texto as string))
+                        continue;
+                    if (enRuta || parametro.GetCustomAttributes<ObligatorioAttribute>().Count > 0)
                         errores[nombre] = new[] { $"The {nombre} field is required." };
+                    else
+                        contexto.ActionArguments[nombre] = null;
                     continue;
                 }
 
-                bool admiteNull = Nullable.GetUnderlyingType(parametro.ParameterType) == typeof(int);
-                if (enRuta || (parametro.ParameterType != typeof(int) && !admiteNull))
+                var tipo = Nullable.GetUnderlyingType(parametro.ParameterType);
+                bool admiteNull = tipo != null;
+                if (enRuta || !Conversores.TryGetValue(tipo ?? parametro.ParameterType, out var conversor))
                     continue;
 
                 var valores = query.Where(p => string.Equals(p.Key, nombre, StringComparison.OrdinalIgnoreCase)).Select(p => p.Value).ToList();
@@ -58,7 +81,7 @@ namespace S50APIService.Api
 
                 try
                 {
-                    contexto.ActionArguments[nombre] = Conversor.ConvertFrom(null, CultureInfo.InvariantCulture, valores[0]);
+                    contexto.ActionArguments[nombre] = conversor(valores[0]);
                 }
                 catch (Exception)
                 {
