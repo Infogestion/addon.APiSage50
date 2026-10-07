@@ -11,7 +11,8 @@ namespace S50APIService.Api
     /// <summary>
     /// Web API 2 acompaña sus propios errores (ruta inexistente, método no permitido, excepción no controlada) de un JSON
     /// {"Message": ...}. ASP.NET Core, en interface.s50c, responde a esos casos con el mismo código pero sin cuerpo,
-    /// y en el 405 añade la cabecera Allow con los métodos que sí admite la ruta.
+    /// y en el 405 añade la cabecera Allow con los métodos que sí admite la ruta. El 415 de un cuerpo que no es JSON
+    /// sí lleva cuerpo allí: el de <see cref="Respuestas.TipoNoAdmitido"/>.
     /// Este manejador ajusta esas respuestas; no toca las que devuelven los controladores.
     /// </summary>
     public sealed class ManejadorErroresSinCuerpo : DelegatingHandler
@@ -21,6 +22,9 @@ namespace S50APIService.Api
             var respuesta = await base.SendAsync(peticion, cancelacion);
             if (respuesta.Content is ObjectContent contenido && contenido.Value is HttpError)
             {
+                if (respuesta.StatusCode == HttpStatusCode.UnsupportedMediaType)
+                    return Respuestas.TipoNoAdmitido();
+
                 respuesta.Content = new ByteArrayContent(new byte[0]);
                 respuesta.Content.Headers.ContentLength = 0;
                 if (respuesta.StatusCode == HttpStatusCode.MethodNotAllowed)

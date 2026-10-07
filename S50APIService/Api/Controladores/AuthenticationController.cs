@@ -27,7 +27,7 @@ namespace S50APIService.Api.Controladores
         [Route("api/nadilux-repartos/{business}/token")]
         public HttpResponseMessage GetTokenAppNadiluxRepartos([FromBody] LoginNadRepartosRequest request, string business)
         {
-            var invalido = ValidacionLogin.Error(request, ModelState);
+            var invalido = ValidacionCuerpo.Error(Request, request, ModelState);
             if (invalido != null)
                 return invalido;
 
@@ -76,7 +76,7 @@ namespace S50APIService.Api.Controladores
         [Route("api/nadilux-mercancias/{business}/token")]
         public HttpResponseMessage GetTokenOperarioGestionMercancia([FromBody] LoginNadRepartosRequest request, string business)
         {
-            var invalido = ValidacionLogin.Error(request, ModelState);
+            var invalido = ValidacionCuerpo.Error(Request, request, ModelState);
             if (invalido != null)
                 return invalido;
 

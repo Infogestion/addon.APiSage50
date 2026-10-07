@@ -56,6 +56,19 @@ namespace S50APIService.Api
                 "One or more validation errors occurred.", errores);
         }
 
+        /// <summary>ValidationProblem(mensaje) de interface.s50c: un 400 con el mensaje en "detail" y un "errors" vacío.</summary>
+        public static HttpResponseMessage ErrorValidacion(string detalle)
+        {
+            return Problema(HttpStatusCode.BadRequest, "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+                "One or more validation errors occurred.", new Dictionary<string, string[]>(), detalle);
+        }
+
+        /// <summary>El 415 de un [ApiController] cuando el cuerpo de la petición no viene como JSON.</summary>
+        public static HttpResponseMessage TipoNoAdmitido()
+        {
+            return Problema(HttpStatusCode.UnsupportedMediaType, "https://tools.ietf.org/html/rfc7231#section-6.5.13", "Unsupported Media Type");
+        }
+
         /// <summary>
         /// ValidationProblem(DBNotFoundException.Message, null, 404) de interface.s50c: la base de datos del ejercicio de la
         /// ruta ({year}) no existe. Lleva "detail" y un "errors" vacío.
