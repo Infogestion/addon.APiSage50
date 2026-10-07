@@ -22,6 +22,46 @@ namespace S50APIService.Servicios
             return Db.Lector.LeerEjercicio<Ubicaciones>(Contexto.AddonSga, "ubicaciones", new Filtro { ["CODIGO"] = code }).FirstOrDefault();
         }
 
+        /// <summary>Crea la ubicación con los valores tal cual llegan, como el INSERT de EF en interface.s50c.</summary>
+        public static void Add(Ubicaciones item)
+        {
+            Db.Lector.ComprobarEjercicio(Contexto.AddonSga);
+            Escribir("INSERT INTO {ubicaciones} ([CODIGO], [NOMBRE], [DESCRIPCION]) VALUES (@codigo, @nombre, @descripcion)",
+                new Dictionary<string, string>
+                {
+                    ["@codigo"] = item.Codigo,
+                    ["@nombre"] = item.Nombre,
+                    ["@descripcion"] = item.Descripcion,
+                });
+        }
+
+        /// <summary>Cambia el nombre y la descripción de la ubicación que tiene guardado ese código.</summary>
+        public static void Update(string codigo, Ubicaciones item)
+        {
+            Escribir("UPDATE {ubicaciones} SET [NOMBRE] = @nombre, [DESCRIPCION] = @descripcion, [MODIFIED] = GETDATE() WHERE [CODIGO] = @codigo",
+                new Dictionary<string, string>
+                {
+                    ["@codigo"] = codigo,
+                    ["@nombre"] = item.Nombre,
+                    ["@descripcion"] = item.Descripcion,
+                });
+        }
+
+        public static void Remove(string codigo)
+        {
+            Escribir("DELETE FROM {ubicaciones} WHERE [CODIGO] = @codigo", new Dictionary<string, string> { ["@codigo"] = codigo });
+        }
+
+        /// <summary>
+        /// Escribe en la base de datos del addon por la capa de datos de Sage: el mantenimiento del addon no hace nada más al
+        /// guardar. Un valor que no cabe en su columna es un error de SQL Server, como con EF.
+        /// </summary>
+        internal static void Escribir(string sql, Dictionary<string, string> parametros)
+        {
+            // La sesión de Sage tiene ANSI_WARNINGS apagado: sin encenderlo, un valor que no cabe se guardaría cortado.
+            Contexto.Escritor.Ejecutar(Contexto.AddonSga, "SET ANSI_WARNINGS ON; " + sql + "; SET ANSI_WARNINGS OFF;", parametros);
+        }
+
         /// <summary>Los artículos que hay en una ubicación, con los nombres del artículo, la ubicación y el almacén.</summary>
         public static object SelectByArticuloRel(string year, string code, string emp)
         {

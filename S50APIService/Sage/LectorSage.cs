@@ -163,7 +163,8 @@ namespace S50APIService.Sage
             return new Consulta { Origen = "{" + tabla + "}", Filtro = filtro };
         }
 
-        private void ComprobarEjercicio(string ejercicio)
+        /// <summary>Lanza <see cref="EjercicioNoEncontradoException"/> si la base de datos no existe (ver <see cref="LeerEjercicio{T}(string, string, Filtro)"/>).</summary>
+        public void ComprobarEjercicio(string ejercicio)
         {
             if (!_sesion.Ejecutar(t => t.ExisteBaseDatos(ejercicio), _timeout, $"comprobar el ejercicio {ejercicio}"))
                 throw new EjercicioNoEncontradoException(ejercicio);

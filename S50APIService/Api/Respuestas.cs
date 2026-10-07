@@ -95,6 +95,14 @@ namespace S50APIService.Api
             return valor == null ? new HttpResponseMessage(HttpStatusCode.NoContent) : Json(valor);
         }
 
+        /// <summary>NotFound(valor) de ASP.NET Core: un 404 con el valor como en Ok(valor) (texto o JSON), o sin cuerpo si es null.</summary>
+        public static HttpResponseMessage NoEncontrado(object valor)
+        {
+            var respuesta = valor == null ? new HttpResponseMessage() : valor is string texto ? Texto(texto) : Json(valor);
+            respuesta.StatusCode = HttpStatusCode.NotFound;
+            return respuesta;
+        }
+
         private static HttpResponseMessage Problema(HttpStatusCode estado, string tipo, string titulo, IDictionary<string, string[]> errores = null, string detalle = null)
         {
             var problema = new Dictionary<string, object>

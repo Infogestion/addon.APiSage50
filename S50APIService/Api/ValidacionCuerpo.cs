@@ -18,8 +18,9 @@ namespace S50APIService.Api
         /// interface.s50c, o null si el cuerpo es válido. Sin cuerpo, "" y "request"; con JSON no válido, "request" y la
         /// ruta del error (FormateadorJson la deja en el ModelState como "request.$..."), salvo si es la raíz "$", que va
         /// antes; con un campo sin valor, los que faltan por longitud del nombre y luego alfabético.
+        /// <paramref name="nombre"/> es el del parámetro de la acción en interface.s50c.
         /// </summary>
-        public static HttpResponseMessage Error(HttpRequestMessage peticion, object request, ModelStateDictionary modelState)
+        public static HttpResponseMessage Error(HttpRequestMessage peticion, object request, ModelStateDictionary modelState, string nombre = "request")
         {
             string tipo = peticion.Content?.Headers.ContentType?.MediaType;
             if (!string.Equals(tipo, "application/json", StringComparison.OrdinalIgnoreCase) && !string.Equals(tipo, "text/json", StringComparison.OrdinalIgnoreCase))
@@ -32,16 +33,16 @@ namespace S50APIService.Api
                 if (errorJson.Key == null)
                 {
                     errores[""] = new[] { "A non-empty request body is required." };
-                    errores["request"] = new[] { "The request field is required." };
+                    errores[nombre] = new[] { $"The {nombre} field is required." };
                 }
                 else
                 {
-                    string ruta = errorJson.Key.StartsWith("request.") ? errorJson.Key.Substring("request.".Length) : errorJson.Key;
+                    string ruta = errorJson.Key.StartsWith(nombre + ".") ? errorJson.Key.Substring(nombre.Length + 1) : errorJson.Key;
                     var mensajes = errorJson.Value.Errors.Select(e => e.ErrorMessage).ToArray();
                     bool enRaiz = ruta.IndexOfAny(new[] { '.', '[' }) < 0;
                     if (enRaiz)
                         errores[ruta] = mensajes;
-                    errores["request"] = new[] { "The request field is required." };
+                    errores[nombre] = new[] { $"The {nombre} field is required." };
                     if (!enRaiz)
                         errores[ruta] = mensajes;
                 }

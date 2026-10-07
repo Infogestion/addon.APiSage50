@@ -327,14 +327,14 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// El mensaje de SQL Server del último error. Sage lo guarda entre comillas en Error_Message; sin ellas está en
-        /// la excepción, que solo se usa si es la de ese mismo error.
+        /// El mensaje de SQL Server del último error. Sage lo guarda entre comillas (y con las suyas dobladas) en Error_Message;
+        /// tal cual está en la excepción, que solo se usa si es la de ese mismo error.
         /// </summary>
         private static string MensajeError()
         {
             string mensaje = DB.Error_Message ?? "";
             string original = DB.Error_Message_Exception?.Message;
-            return !string.IsNullOrEmpty(original) && mensaje.Contains(original) ? original : mensaje;
+            return !string.IsNullOrEmpty(original) && mensaje.Contains(original.Replace("'", "''")) ? original : mensaje;
         }
 
         /// <summary>
