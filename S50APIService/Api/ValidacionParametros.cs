@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Web.Http.Controllers;
 using System.Web.Http.Filters;
 
@@ -38,6 +40,16 @@ namespace S50APIService.Api
             [typeof(decimal)] = valor => decimal.Parse(valor, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture),
             [typeof(DateTime)] = valor => DateTime.Parse(valor, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces),
         };
+
+        /// <summary>Antes que los parámetros se lee el formulario: si está mal formado, ASP.NET Core solo responde ese error.</summary>
+        public override async Task OnActionExecutingAsync(HttpActionContext contexto, CancellationToken cancelacion)
+        {
+            var admitido = contexto.ActionDescriptor.GetCustomAttributes<ConsumeAttribute>().FirstOrDefault();
+            if (admitido != null && admitido.Tipo == "multipart/form-data")
+                contexto.Response = await Formulario.Leer(contexto.Request);
+            if (contexto.Response == null)
+                OnActionExecuting(contexto);
+        }
 
         public override void OnActionExecuting(HttpActionContext contexto)
         {

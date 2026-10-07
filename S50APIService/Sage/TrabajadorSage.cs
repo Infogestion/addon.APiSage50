@@ -212,6 +212,112 @@ namespace S50APIService.Sage
             });
         }
 
+        /// <summary>
+        /// Separa un reparto del addon FERRETERIATIA como su botón "separar reparto": crea el documento
+        /// <paramref name="numeroNuevo"/> con la misma cabecera y le pasa de cada línea de <paramref name="lineas"/>
+        /// (número de línea → unidades) esas unidades; la línea que se pasa entera se quita del original. Devuelve null si
+        /// se ha hecho y, si no, el motivo.
+        /// </summary>
+        public string SepararReparto(string ejercicio, string empresa, string numero, string numeroNuevo, Dictionary<int, decimal> lineas)
+        {
+            return EnSage(() =>
+            {
+                const string libreria = "sage.addons.FerreteriaTia";
+                var tipo = TipoDeAddon(libreria, "sage.addons.FerreteriaTia.Negocio.Documentos.DocumentoEntRep");
+                var apuntarReparto = TipoDeAddon(libreria, "sage.addons.FerreteriaTia.Negocio.Clases.AddonDbExtAlbVenta").GetMethod("setJsonRepartoInDocumentByMove");
+
+                dynamic origen = Activator.CreateInstance(tipo);
+                origen._Ejercicio = ejercicio;
+                origen._Empresa = empresa;
+                origen._Numero = numero;
+                if (!origen._Existe_Registro())
+                    return "No se encontró el documento.";
+
+                origen._Load();
+                if (origen._EnUso)
+                    return "El documento está abierto en Sage: no se ha separado.";
+                try
+                {
+                    foreach (var pedida in lineas)
+                    {
+                        dynamic linea = origen._Detalle._GetItemByLinea(pedida.Key);
+                        if (linea == null || pedida.Value <= 0 || pedida.Value > linea._Unidades)
+                            return "No se encontró la línea del documento.";
+                    }
+
+                    dynamic nuevo = Activator.CreateInstance(tipo);
+                    nuevo._Ejercicio = origen._Ejercicio;
+                    nuevo._Empresa = origen._Empresa;
+                    nuevo._Numero = numeroNuevo;
+                    foreach (string propiedad in CabeceraReparto)
+                        tipo.GetProperty(propiedad).SetValue(nuevo, tipo.GetProperty(propiedad).GetValue(origen));
+                    if (!nuevo._Save())
+                        return Motivo(nuevo);
+
+                    foreach (var pedida in lineas)
+                    {
+                        dynamic linea = origen._Detalle._GetItemByLinea(pedida.Key);
+                        dynamic lineaNueva = nuevo._Detalle._NewItem();
+                        lineaNueva._Articulo = linea._Articulo;
+                        lineaNueva._Linea = linea._Linea;
+                        lineaNueva._Unidades = pedida.Value;
+                        lineaNueva._Traspaso = linea._Traspaso;
+                        lineaNueva._LineaAlb = linea._LineaAlb;
+                        lineaNueva._Observaciones = linea._Observaciones;
+                        lineaNueva._Almacen = linea._Almacen;
+                        lineaNueva._Numero = nuevo._Numero;
+                        lineaNueva._Ejercicio = nuevo._Ejercicio;
+                        lineaNueva._Empresa = nuevo._Empresa;
+                        if (pedida.Value == linea._Unidades)
+                            origen._Detalle._DeleteItem(linea);
+                        else
+                            linea._Unidades -= pedida.Value;
+
+                        var parametros = new List<DB.QueryParams>
+                        {
+                            new DB.QueryParams("@nuevo", Convert.ToString(lineaNueva._Numero), SqlDbType.VarChar),
+                            new DB.QueryParams("@hoja", Convert.ToString(linea._Numero).Trim(), SqlDbType.VarChar),
+                            new DB.QueryParams("@ejercicio", Convert.ToString(lineaNueva._Ejercicio).Trim(), SqlDbType.VarChar),
+                            new DB.QueryParams("@empresa", Convert.ToString(lineaNueva._Empresa).Trim(), SqlDbType.VarChar),
+                            new DB.QueryParams("@linea", Convert.ToString(linea._LineaAlb), SqlDbType.VarChar),
+                        };
+                        string instruccion = "UPDATE " + DB.SQLDatabase("FERRETERIATIA", "d_albv_adi") + " SET [hojaentrega] = @nuevo"
+                            + " WHERE LTRIM(RTRIM([hojaentrega])) = @hoja AND LTRIM(RTRIM([EJERCICIO])) = @ejercicio"
+                            + " AND LTRIM(RTRIM([EMPRESA])) = @empresa AND [LINEA] = @linea";
+                        if (!DB.SQLExecParams(instruccion, out int _, parametros))
+                            throw new ErrorSqlException(MensajeError(), instruccion);
+                        apuntarReparto.Invoke(null, new object[] { linea, lineaNueva });
+                    }
+
+                    if (!nuevo._Save())
+                        return Motivo(nuevo);
+                    if (!origen._Save())
+                        return Motivo(origen);
+                    nuevo._Abandonar_Documento();
+                    return null;
+                }
+                finally
+                {
+                    origen._Bloquear_Documento(false);
+                }
+            });
+        }
+
+        /// <summary>Lo que el botón "separar reparto" copia de la cabecera, más _EmailEnviado para que la parte nueva de un reparto ya avisado no avise otra vez al cliente.</summary>
+        private static readonly string[] CabeceraReparto =
+        {
+            "_Fecha", "_Camion", "_Cliente", "_Albaran", "_Entregado", "_Observaciones", "_Tipo", "_Almacen", "_DireccionCliente",
+            "_CpCliente", "_Poblacion", "_Provincia", "_Telefono", "_TfContacto", "_Contacto", "_FechaEntrega", "_Conductor",
+            "_FechaEntregaPrev", "_Firma", "_LetraAlb", "_Pagado", "_CobrarDestino", "_ImporteCobrar", "_TramoHorario", "_ObsInt",
+            "_Ruta", "_Zona", "_Incidencia", "_EmailEnviado",
+        };
+
+        private static string Motivo(dynamic documento)
+        {
+            string motivo = Convert.ToString(documento._Mensaje_Error);
+            return string.IsNullOrWhiteSpace(motivo) ? "Sage no ha guardado el documento." : motivo;
+        }
+
         /// <summary>La clase de un addon de Sage: de la librería que ya tenga cargada Sage o, si no, de su carpeta de librerías.</summary>
         private static Type TipoDeAddon(string libreria, string clase)
         {

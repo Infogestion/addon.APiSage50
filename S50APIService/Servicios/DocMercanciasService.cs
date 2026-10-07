@@ -142,7 +142,7 @@ namespace S50APIService.Servicios
                 if (documento == null)
                     return ResultadoEscritura.Error("No se encontró el documento.");
 
-                var cambios = new Dictionary<string, string>();
+                var cambios = new Dictionary<string, object>();
                 if (obs != null && obs != documento.COMMENTS)
                     cambios["_Comments"] = obs;
                 if (state.Trim() != documento.STATE.Trim())

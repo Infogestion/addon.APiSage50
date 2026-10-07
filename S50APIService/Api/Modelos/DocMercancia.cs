@@ -91,7 +91,7 @@ namespace S50APIService.Api.Modelos
             Message = message;
         }
 
-        public static ResultadoEscritura Guardado() => new ResultadoEscritura(true, Actualizado);
+        public static ResultadoEscritura Guardado(string mensaje = Actualizado) => new ResultadoEscritura(true, mensaje);
         public static ResultadoEscritura Error(string mensaje) => new ResultadoEscritura(false, mensaje);
     }
 

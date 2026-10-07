@@ -20,8 +20,8 @@ namespace S50APIService.Sage
         public string Empresa { get; set; }
         public string Numero { get; set; }
 
-        /// <summary>Propiedades de la cabecera que cambian, con su valor nuevo (p. ej. "_Estadoo" → "Cerrado").</summary>
-        public Dictionary<string, string> Cabecera { get; set; } = new Dictionary<string, string>();
+        /// <summary>Propiedades de la cabecera que cambian, con su valor nuevo del tipo de la propiedad (p. ej. "_Estadoo" → "Cerrado", "_Entregado" → true).</summary>
+        public Dictionary<string, object> Cabecera { get; set; } = new Dictionary<string, object>();
 
         /// <summary>La línea que cambia; null si solo cambia la cabecera.</summary>
         public int? Linea { get; set; }

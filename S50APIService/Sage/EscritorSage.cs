@@ -30,5 +30,12 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.GuardarDocumento(cambios), _timeout,
                 $"guardar el documento {cambios.Clase} {cambios.Ejercicio}/{cambios.Empresa}/{cambios.Numero}");
         }
+
+        /// <summary>Ver <see cref="TrabajadorSage.SepararReparto"/>.</summary>
+        public string SepararReparto(string ejercicio, string empresa, string numero, string numeroNuevo, Dictionary<int, decimal> lineas)
+        {
+            return _sesion.Ejecutar(t => t.SepararReparto(ejercicio, empresa, numero, numeroNuevo, lineas), _timeout,
+                $"separar el reparto {ejercicio}/{empresa}/{numero}");
+        }
     }
 }

@@ -52,6 +52,32 @@ namespace S50APIService.Api.Controladores
         }
 
         /// <summary>
+        /// Permite editar un doc de reparto desde la app de repartos
+        /// </summary>
+        [HttpPut]
+        [Route("")]
+        [Consume("multipart/form-data")]
+        [ResponseType(typeof(object))]
+        public HttpResponseMessage SetDocReparto([Obligatorio] string num = null, bool? entregado = null, string fechaEntregado = null, string observaciones = null,
+            string obsInt = null, bool? pagado = null, string incidencia = null, string nombre = null, string dni = null, string email = null, bool? enviarFac = null)
+        {
+            return Respuestas.Json(DocEntRepService.UpdateRepartos(num, entregado, fechaEntregado, observaciones, obsInt, pagado, incidencia, nombre, dni, email, enviarFac,
+                Formulario.Ficheros(Request, "Firma"), Formulario.Ficheros(Request, "FirmaSeller"), Formulario.Ficheros(Request, "Photos")));
+        }
+
+        /// <summary>
+        /// Permite editar un doc de reparto desde la app de repartos
+        /// </summary>
+        [HttpPut]
+        [Route("MoveLinesToCopyDelivery")]
+        [Consume("multipart/form-data")]
+        [ResponseType(typeof(object))]
+        public HttpResponseMessage MoveLinesToCopyDelivery([Obligatorio] string num = null, [Obligatorio] string lines = null)
+        {
+            return Respuestas.Json(DocEntRepService.MoveLinesToCopyDelivery(num, lines));
+        }
+
+        /// <summary>
         /// Permite dar de baja las series en la tabla Compras tras una entrega
         /// </summary>
         [HttpPost]

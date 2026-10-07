@@ -116,6 +116,13 @@ namespace S50APIService.Api.Modelos
         public bool? ENVIARFAC { get; set; }
     }
 
+    /// <summary>Un valor de la configuración del addon FERRETERIATIA (tabla configgeneral), p. ej. RUTA_FIRMA.</summary>
+    public sealed class Configgeneral
+    {
+        public string Field { get; set; }
+        public string Valor { get; set; }
+    }
+
     public sealed class DocReparto
     {
         public CDocEntRep CDocEntRep { get; set; }
