@@ -70,11 +70,14 @@ namespace S50APIService.Servicios
 
         /// <summary>
         /// Crea la serie como el INSERT de EF en interface.s50c: los campos que no vienen se quedan con el valor por defecto
-        /// de su columna y vuelven rellenos en <paramref name="item"/>.
+        /// de su columna y vuelven rellenos en <paramref name="item"/>. Si a la clave le falta algún campo no guarda nada:
+        /// EF intentaba releer la clave generada y SQL Server lo rechazaba con ese mensaje.
         /// </summary>
         public static void Add(string year, Venser item)
         {
             Db.Lector.ComprobarEjercicio(year);
+            if (Clave(item).Any(v => v.Value == null))
+                throw new InvalidOperationException("No se puede resolver el conflicto de intercalación entre 'Modern_Spanish_CI_AI' y 'Modern_Spanish_CS_AI' de la operación equal to.");
 
             var parametros = new Dictionary<string, string>();
             var valores = Clave(item).Concat(Resto(item)).Where(v => !Falta(v.Value))
@@ -88,7 +91,7 @@ namespace S50APIService.Servicios
 
         /// <summary>
         /// Cambia todos los campos de la serie que tiene esa clave (empresa, albarán, letra, artículo, línea y serie), como
-        /// el UPDATE de EF en interface.s50c. Si a la clave le falta algún campo, EF la da por nueva y la crea.
+        /// el UPDATE de EF en interface.s50c. Si a la clave le falta algún campo, EF la da por nueva e intenta crearla.
         /// </summary>
         public static void Update(string year, Venser item)
         {
@@ -111,13 +114,13 @@ namespace S50APIService.Servicios
             return Db.Lector.LeerEjercicio<Venser>(year, "venser", FiltroClave(item)).FirstOrDefault();
         }
 
-        /// <summary>Las columnas de la clave con su valor, en el orden en que EF las escribe.</summary>
+        /// <summary>Las columnas de la clave con su valor, en el orden en que EF las escribe (el del nombre de la propiedad).</summary>
         private static Dictionary<string, object> Clave(Venser item) => new Dictionary<string, object>
         {
-            ["EMPRESA"] = item.Empresa,
             ["ALBARAN"] = item.Albaran,
-            ["LETRA"] = item.Letra,
             ["ARTICULO"] = item.Articulo,
+            ["EMPRESA"] = item.Empresa,
+            ["LETRA"] = item.Letra,
             ["LINEA"] = item.Linea,
             ["SERIE"] = item.Serie,
         };
