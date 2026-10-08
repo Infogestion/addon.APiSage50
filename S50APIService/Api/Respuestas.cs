@@ -75,8 +75,14 @@ namespace S50APIService.Api
         /// </summary>
         public static HttpResponseMessage EjercicioNoEncontrado()
         {
+            return ErrorNoEncontrado("The db for the requested year does not exist");
+        }
+
+        /// <summary>ValidationProblem(mensaje, null, 404) de interface.s50c: un 404 con el mensaje en "detail" y un "errors" vacío.</summary>
+        public static HttpResponseMessage ErrorNoEncontrado(string detalle)
+        {
             return Problema(HttpStatusCode.NotFound, "https://tools.ietf.org/html/rfc7231#section-6.5.4",
-                "One or more validation errors occurred.", new Dictionary<string, string[]>(), "The db for the requested year does not exist");
+                "One or more validation errors occurred.", new Dictionary<string, string[]>(), detalle);
         }
 
         /// <summary>

@@ -8,7 +8,9 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using sage._50;
 using sage.ew.db;
+using sage.ew.docventatpv;
 using sage.ew.global;
+using sage.ew.serie;
 
 namespace S50APIService.Sage
 {
@@ -299,6 +301,68 @@ namespace S50APIService.Sage
                 finally
                 {
                     origen._Bloquear_Documento(false);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Registra una serie como vendida en una línea de un albarán de venta, como al teclearla en el albarán: Sage la
+        /// apunta en venser, la da de baja en compras y anota la venta en su historial (hisserie). El albarán no se
+        /// modifica. Devuelve null si se ha hecho y, si no, el motivo.
+        /// </summary>
+        public string VenderSerie(string ejercicio, string empresa, string albaran, string letra, int linea, string articulo, string serie)
+        {
+            return CambiarSerie(ejercicio, empresa, albaran, letra, linea, articulo, serie, vender: true);
+        }
+
+        /// <summary>
+        /// Deshace <see cref="VenderSerie"/>: Sage quita la serie de venser, la vuelve a dar de alta en compras y lo anota
+        /// en su historial. Devuelve null si se ha hecho y, si no, el motivo.
+        /// </summary>
+        public string AnularVentaSerie(string ejercicio, string empresa, string albaran, string letra, int linea, string articulo, string serie)
+        {
+            return CambiarSerie(ejercicio, empresa, albaran, letra, linea, articulo, serie, vender: false);
+        }
+
+        /// <summary>
+        /// Carga el albarán de venta y vende o anula la serie en la línea pedida con la clase de series de los documentos
+        /// de venta de Sage (SerieDocVenta), que solo trabaja en el ejercicio activo. Las clases de Sage no pueden aparecer
+        /// en los parámetros de ningún método de esta clase: el resto del servicio no puede cargarlas.
+        /// </summary>
+        private string CambiarSerie(string ejercicio, string empresa, string albaran, string letra, int linea, string articulo, string serie, bool vender)
+        {
+            return EnSage(() =>
+            {
+                if (ejercicio != Global("wc_any"))
+                    return $"Sage solo registra series en su ejercicio activo ({Global("wc_any")}).";
+
+                var documento = new ewDocVentaTPV();
+                string numero = albaran.Trim().PadLeft(10);
+                if (!documento._Existe(empresa, numero, letra))
+                    return "No se encontró el albarán.";
+
+                documento._Load(empresa, numero, letra);
+                if (documento._EnUso)
+                    return "El albarán está abierto en Sage: no se ha cambiado la serie.";
+                try
+                {
+                    ewDocVentaLinTPV lineaAlbaran = null;
+                    foreach (var candidata in documento._Lineas)
+                        if (candidata._LineaReal == linea)
+                            lineaAlbaran = candidata;
+                    if (lineaAlbaran == null)
+                        return "No se encontró la línea del albarán.";
+                    if (lineaAlbaran._Articulo.Trim() != articulo)
+                        return "La línea del albarán es de otro artículo.";
+
+                    var series = new SerieDocVenta();
+                    if (vender)
+                        return series._Save_NullToValue(serie, lineaAlbaran) ? null : "Sage no ha registrado la serie.";
+                    return series._Delete(serie, lineaAlbaran, false) ? null : "Sage no ha anulado la venta de la serie.";
+                }
+                finally
+                {
+                    documento._Bloquear_Documento(false);
                 }
             });
         }

@@ -1,11 +1,18 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using S50APIService.Api;
 using S50APIService.Api.Modelos;
 using S50APIService.Sage;
 
 namespace S50APIService.Servicios
 {
-    /// <summary>Series vendidas en los albaranes de venta (tabla venser del ejercicio).</summary>
+    /// <summary>
+    /// Series vendidas en los albaranes de venta (tabla venser del ejercicio). Registrar y anular la venta de una serie
+    /// se hace con la clase de series de Sage; guardar una fila tal cual llega (Add y Update) no tiene equivalente en Sage
+    /// y va por su capa de datos.
+    /// </summary>
     internal static class VenserService
     {
         public static ListaJson Select(string year, string empresa, string albaran)
@@ -25,6 +32,149 @@ namespace S50APIService.Servicios
                 ["ALBARAN"] = albaran,
                 ["SERIE"] = serie,
             }.Exacto("LINEA", linea.ToString(CultureInfo.InvariantCulture))).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Registra una serie como vendida en la línea del albarán con la clase de series de Sage, que además de apuntarla
+        /// en venser la da de baja en compras y anota la venta en su historial. Lanza el motivo si no se puede.
+        /// </summary>
+        public static void Vender(string year, AltaVenserRequest request, string serie)
+        {
+            Db.Lector.ComprobarEjercicio(year);
+            if (ComprasService.SelectBySerie(request.Empresa, request.Articulo, serie) == null)
+                throw new InvalidOperationException($"La serie {serie} no existe para el artículo {request.Articulo.Trim()}.");
+            if (Select(year, request.Empresa, request.Albaran, request.Linea, serie) != null)
+                throw new InvalidOperationException($"La serie {serie} ya está en el albarán.");
+
+            string motivo = Contexto.Escritor.VenderSerie(year, request.Empresa.Trim(), request.Albaran, request.Letra.Trim(), request.Linea,
+                request.Articulo.Trim(), serie.Trim());
+            if (motivo != null)
+                throw new InvalidOperationException(motivo);
+        }
+
+        /// <summary>
+        /// Anula la venta de una serie con la clase de series de Sage, que además de quitarla de venser la devuelve al
+        /// stock en compras y lo anota en su historial. Sage no reconoce las series guardadas con el número de albarán sin
+        /// alinear a la derecha (las que creaba interface.s50c). Lanza el motivo si no se puede.
+        /// </summary>
+        public static void AnularVenta(string year, Venser item)
+        {
+            if (item.Albaran != item.Albaran.Trim().PadLeft(item.Albaran.Length))
+                throw new InvalidOperationException("La serie está guardada con el número de albarán sin alinear y Sage no la reconoce: no se ha anulado.");
+
+            string motivo = Contexto.Escritor.AnularVentaSerie(year, item.Empresa.Trim(), item.Albaran, item.Letra.Trim(), item.Linea,
+                item.Articulo.Trim(), item.Serie.TrimEnd());
+            if (motivo != null)
+                throw new InvalidOperationException(motivo);
+        }
+
+        /// <summary>
+        /// Crea la serie como el INSERT de EF en interface.s50c: los campos que no vienen se quedan con el valor por defecto
+        /// de su columna y vuelven rellenos en <paramref name="item"/>.
+        /// </summary>
+        public static void Add(string year, Venser item)
+        {
+            Db.Lector.ComprobarEjercicio(year);
+
+            var parametros = new Dictionary<string, string>();
+            var valores = Clave(item).Concat(Resto(item)).Where(v => !Falta(v.Value))
+                .ToDictionary(v => "[" + v.Key + "]", v => Sql(v.Value, parametros));
+            Escribir(year, $"INSERT INTO {{venser}} ({string.Join(", ", valores.Keys)}) VALUES ({string.Join(", ", valores.Values)})", parametros);
+
+            var guardada = Guardada(year, item);
+            foreach (var campo in typeof(Venser).GetProperties().Where(c => Falta(c.GetValue(item))))
+                campo.SetValue(item, campo.GetValue(guardada));
+        }
+
+        /// <summary>
+        /// Cambia todos los campos de la serie que tiene esa clave (empresa, albarán, letra, artículo, línea y serie), como
+        /// el UPDATE de EF en interface.s50c. Si a la clave le falta algún campo, EF la da por nueva y la crea.
+        /// </summary>
+        public static void Update(string year, Venser item)
+        {
+            if (Clave(item).Any(v => v.Value == null))
+            {
+                Add(year, item);
+                return;
+            }
+            if (Guardada(year, item) == null)
+                throw new InvalidOperationException("Value cannot be null. (Parameter 'propertyValues')");
+
+            var clave = FiltroClave(item);
+            var parametros = new Dictionary<string, string>(clave.Parametros);
+            var cambios = Resto(item).Select(v => $"[{v.Key}] = {Sql(v.Value, parametros)}").ToList();
+            Escribir(year, $"UPDATE {{venser}} SET {string.Join(", ", cambios)} WHERE {clave.Condicion}", parametros);
+        }
+
+        private static Venser Guardada(string year, Venser item)
+        {
+            return Db.Lector.LeerEjercicio<Venser>(year, "venser", FiltroClave(item)).FirstOrDefault();
+        }
+
+        /// <summary>Las columnas de la clave con su valor, en el orden en que EF las escribe.</summary>
+        private static Dictionary<string, object> Clave(Venser item) => new Dictionary<string, object>
+        {
+            ["EMPRESA"] = item.Empresa,
+            ["ALBARAN"] = item.Albaran,
+            ["LETRA"] = item.Letra,
+            ["ARTICULO"] = item.Articulo,
+            ["LINEA"] = item.Linea,
+            ["SERIE"] = item.Serie,
+        };
+
+        /// <summary>Las demás columnas con su valor, en el orden en que EF las escribe (el del nombre de la propiedad).</summary>
+        private static Dictionary<string, object> Resto(Venser item) => new Dictionary<string, object>
+        {
+            ["CREATED"] = item.Created,
+            ["FECHALOG"] = item.Fechalog,
+            ["GUID_ID"] = item.GuidId,
+            ["LOTE"] = item.Lote,
+            ["MODELO"] = item.Modelo,
+            ["MODIFIED"] = item.Modified,
+            ["NUMERO"] = item.Numero,
+            ["UBICA"] = item.Ubica,
+            ["VISTA"] = item.Vista,
+        };
+
+        /// <summary>La fila con exactamente esa clave: los espacios de delante cuentan.</summary>
+        private static Filtro FiltroClave(Venser item)
+        {
+            var filtro = new Filtro();
+            foreach (var columna in Clave(item))
+                filtro.Exacto(columna.Key, Convert.ToString(columna.Value ?? "", CultureInfo.InvariantCulture));
+            return filtro;
+        }
+
+        /// <summary>True si el campo no viene en la petición: sin valor o, en una fecha obligatoria, sin fecha.</summary>
+        private static bool Falta(object valor) => valor == null || valor.Equals(default(DateTime));
+
+        /// <summary>El valor como va en la instrucción: NULL o un parámetro, que se añade a <paramref name="parametros"/>.</summary>
+        private static string Sql(object valor, Dictionary<string, string> parametros)
+        {
+            if (valor == null)
+                return "NULL";
+
+            string nombre = "@p" + parametros.Count;
+            if (valor is DateTime fecha)
+            {
+                if (fecha.Year < 1753)
+                    throw new InvalidOperationException("SqlDateTime overflow. Must be between 1/1/1753 12:00:00 AM and 12/31/9999 11:59:59 PM.");
+
+                parametros[nombre] = fecha.ToString("yyyy-MM-ddTHH:mm:ss.fff");
+                return $"CONVERT(datetime, {nombre}, 126)";
+            }
+
+            parametros[nombre] = valor is bool si ? (si ? "1" : "0") : Convert.ToString(valor, CultureInfo.InvariantCulture);
+            return nombre;
+        }
+
+        /// <summary>
+        /// Escribe en venser por la capa de datos de Sage. La sesión de Sage tiene ANSI_WARNINGS apagado: se enciende para
+        /// que un valor que no cabe en su columna sea un error de SQL Server, como con EF, y no se guarde cortado.
+        /// </summary>
+        private static void Escribir(string year, string sql, Dictionary<string, string> parametros)
+        {
+            Contexto.Escritor.Ejecutar(year, "SET ANSI_WARNINGS ON; " + sql + "; SET ANSI_WARNINGS OFF;", parametros);
         }
     }
 }

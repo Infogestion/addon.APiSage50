@@ -19,8 +19,11 @@ namespace S50APIService.Api
         /// ruta del error (FormateadorJson la deja en el ModelState como "request.$..."), salvo si es la raíz "$", que va
         /// antes; con un campo sin valor, los que faltan por longitud del nombre y luego alfabético.
         /// <paramref name="nombre"/> es el del parámetro de la acción en interface.s50c.
+        /// <paramref name="camposObligatorios"/> es false para los modelos de interface.s50c con "#nullable disable" (los
+        /// generados de la base de datos), que admiten cualquier campo sin valor.
         /// </summary>
-        public static HttpResponseMessage Error(HttpRequestMessage peticion, object request, ModelStateDictionary modelState, string nombre = "request")
+        public static HttpResponseMessage Error(HttpRequestMessage peticion, object request, ModelStateDictionary modelState, string nombre = "request",
+            bool camposObligatorios = true)
         {
             string tipo = peticion.Content?.Headers.ContentType?.MediaType;
             if (!string.Equals(tipo, "application/json", StringComparison.OrdinalIgnoreCase) && !string.Equals(tipo, "text/json", StringComparison.OrdinalIgnoreCase))
@@ -47,7 +50,7 @@ namespace S50APIService.Api
                         errores[ruta] = mensajes;
                 }
             }
-            else
+            else if (camposObligatorios)
             {
                 var sinValor = request.GetType().GetProperties()
                     .Where(p => !p.PropertyType.IsValueType && p.GetValue(request) == null)
