@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Web.Http;
 using System.Web.Http.Description;
 using S50APIService.Api.Autenticacion;
 using S50APIService.Api.Modelos;
-using S50APIService.Sage;
 using S50APIService.Servicios;
 
 namespace S50APIService.Api.Controladores
@@ -35,7 +33,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(object))]
         public HttpResponseMessage Post(string year, [FromBody] Venser item)
         {
-            return ValidacionCuerpo.Error(Request, item, ModelState, nameof(item), camposObligatorios: false) ?? Intentar(() =>
+            return ValidacionCuerpo.Error(Request, item, ModelState, nameof(item), camposObligatorios: false) ?? Escritura.Intentar(() =>
             {
                 VenserService.Add(year, item);
                 return Respuestas.Json(item);
@@ -47,7 +45,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(object))]
         public HttpResponseMessage Put(string year, [FromBody] Venser item)
         {
-            return ValidacionCuerpo.Error(Request, item, ModelState, nameof(item), camposObligatorios: false) ?? Intentar(() =>
+            return ValidacionCuerpo.Error(Request, item, ModelState, nameof(item), camposObligatorios: false) ?? Escritura.Intentar(() =>
             {
                 VenserService.Update(year, item);
                 return Respuestas.Json(item);
@@ -59,7 +57,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(object))]
         public HttpResponseMessage Delete(string year, string empresa, string albaran, int linea, string serie)
         {
-            return Intentar(() =>
+            return Escritura.Intentar(() =>
             {
                 var item = VenserService.Select(year, empresa.UrlDecode(), albaran.UrlDecode(), linea, serie.UrlDecode());
                 if (item == null)
@@ -75,7 +73,7 @@ namespace S50APIService.Api.Controladores
         [ResponseType(typeof(object))]
         public HttpResponseMessage AltaSeries(string year, [FromBody] AltaVenserRequest request)
         {
-            return ValidacionCuerpo.Error(Request, request, ModelState) ?? Intentar(() =>
+            return ValidacionCuerpo.Error(Request, request, ModelState) ?? Escritura.Intentar(() =>
             {
                 if (request.Series.Count == 0)
                     return Respuestas.Json(new { result = true, message = "No hay series" });
@@ -85,30 +83,6 @@ namespace S50APIService.Api.Controladores
 
                 return Respuestas.Json(new { result = true, message = "Series registradas en venser" });
             });
-        }
-
-        /// <summary>
-        /// Como el try/catch de las escrituras de interface.s50c: cualquier error es un 400 con su mensaje (el de SQL Server
-        /// si viene de la base de datos), salvo que falte la base de datos del ejercicio, que es el 404 de siempre.
-        /// </summary>
-        private static HttpResponseMessage Intentar(Func<HttpResponseMessage> escritura)
-        {
-            try
-            {
-                return escritura();
-            }
-            catch (EjercicioNoEncontradoException)
-            {
-                throw;
-            }
-            catch (ErrorSqlException ex)
-            {
-                return Respuestas.ErrorValidacion(ex.MensajeSql);
-            }
-            catch (Exception ex)
-            {
-                return Respuestas.ErrorValidacion(ex.Message);
-            }
         }
     }
 }

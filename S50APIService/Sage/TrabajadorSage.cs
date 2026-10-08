@@ -7,10 +7,12 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using sage._50;
+using sage.ew.articulo;
 using sage.ew.db;
 using sage.ew.docventatpv;
 using sage.ew.global;
 using sage.ew.serie;
+using sage.ew.stocks;
 
 namespace S50APIService.Sage
 {
@@ -365,6 +367,202 @@ namespace S50APIService.Sage
                     documento._Bloquear_Documento(false);
                 }
             });
+        }
+
+        /// <summary>
+        /// Reserva el siguiente número de albarán de traspaso con la clase de traspasos de Sage, que lo cuenta en la empresa
+        /// y se salta los que ya existen. Devuelve null y el número en <paramref name="numero"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string NuevoNumeroTraspaso(string ejercicio, string empresa, out string numero)
+        {
+            string reservado = null;
+            string motivo = EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                var documento = new StockAlbTraspaso();
+                documento._New();
+                reservado = documento._Obten_Nuevo_Numero();
+                return string.IsNullOrWhiteSpace(reservado) ? "Sage no ha dado un número de traspaso." : null;
+            });
+            numero = reservado;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Añade una línea a un albarán de traspaso como al teclearla en Sage: guarda la línea con el nombre y el coste del
+        /// artículo, mueve el stock del almacén de origen al de destino y traspasa cada serie (compras, hisserie y
+        /// traspser). Las unidades de un artículo con series se ponen sin su setter, que abriría la pantalla de series.
+        /// Devuelve null y el número de la línea en <paramref name="linea"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string AnadirLineaTraspaso(string ejercicio, string empresa, string numero, string articulo, decimal unidades, string[] series, out int linea)
+        {
+            int nueva = 0;
+            string motivo = EnSage(() =>
+            {
+                using (var avisos = new AvisosDeSage())
+                {
+                    var ficha = new Articulo(articulo, "", "");
+                    if (!ficha._Existe_Registro())
+                        return "No se encontró el artículo.";
+                    if (ficha._UsaSeries && series.Length != unidades)
+                        return "El artículo trabaja con series: hay que indicar una serie por unidad.";
+                    if (!ficha._UsaSeries && series.Length > 0)
+                        return "El artículo no trabaja con series.";
+
+                    var documento = (StockAlbTraspaso)AbrirTraspaso(ejercicio, empresa, numero, out string cerrado);
+                    if (documento == null)
+                        return cerrado;
+                    try
+                    {
+                        var lineaNueva = documento._AddLinea(-1);
+                        lineaNueva._Articulo = articulo;
+                        if (ficha._UsaSeries)
+                            Serie._UpdateSilentLinea(lineaNueva, "_nUnidades", unidades);
+                        else
+                            lineaNueva._Unidades = unidades;
+
+                        if (string.IsNullOrWhiteSpace(lineaNueva._Articulo) || lineaNueva._Unidades != unidades)
+                        {
+                            lineaNueva._Delete();
+                            return avisos.Texto ?? "Sage no ha aceptado la línea.";
+                        }
+                        if (!documento._Save())
+                            return avisos.Texto ?? Motivo(documento);
+
+                        var traspasoDeSeries = new SerieDocStockTraspaso();
+                        foreach (string serie in series)
+                            if (!traspasoDeSeries._Save_NullToValue(serie, lineaNueva))
+                                return $"Sage no ha traspasado la serie {serie}.";
+
+                        nueva = lineaNueva._Linea;
+                        return null;
+                    }
+                    finally
+                    {
+                        documento._Bloquear_Documento(false);
+                    }
+                }
+            });
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Borra un albarán de traspaso como el botón de borrar de Sage: quita cada línea devolviendo el stock al almacén
+        /// de origen y deshaciendo el traspaso de sus series, y después la cabecera. Devuelve null si se ha borrado y, si
+        /// no, el motivo.
+        /// </summary>
+        public string BorrarTraspaso(string ejercicio, string empresa, string numero)
+        {
+            return EnSage(() =>
+            {
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = (StockAlbTraspaso)AbrirTraspaso(ejercicio, empresa, numero, out string cerrado);
+                    if (documento == null)
+                        return cerrado;
+                    try
+                    {
+                        return documento._Delete() ? null : avisos.Texto ?? Motivo(documento);
+                    }
+                    finally
+                    {
+                        documento._Bloquear_Documento(false);
+                    }
+                }
+            });
+        }
+
+        /// <summary>
+        /// El albarán de traspaso (StockAlbTraspaso) cargado y bloqueado para cambiarlo, o null y el motivo. Sage solo carga
+        /// la cabecera de los traspasos que tienen líneas; la de uno que aún no tiene ninguna se le da leída de c_albatr,
+        /// con la fecha sin hora, que es como Sage la guarda y como apunta el stock.
+        /// Devuelve object porque las clases de Sage no pueden aparecer en la firma de ningún método de esta clase.
+        /// </summary>
+        private static object AbrirTraspaso(string ejercicio, string empresa, string numero, out string motivo)
+        {
+            motivo = FueraDeLaSesion(ejercicio, empresa);
+            if (motivo != null)
+                return null;
+
+            var cabecera = new DataTable();
+            string sql = "SELECT * FROM " + DB.SQLDatabase("GESTION", "C_ALBATR") + " WHERE EMPRESA = " + DB.SQLString(empresa)
+                + " AND NUMERO = " + DB.SQLString(numero.Trim().PadLeft(10));
+            if (!DB.SQLExec(sql, ref cabecera))
+                throw new ErrorSqlException(MensajeError(), sql);
+            if (cabecera.Rows.Count == 0)
+            {
+                motivo = "No se encontró el traspaso.";
+                return null;
+            }
+
+            var documento = new StockAlbTraspaso();
+            documento._New();
+            documento._Numero = numero;
+            documento._Load();
+            if (documento._EnUso)
+            {
+                motivo = "El traspaso está abierto en Sage: no se ha cambiado.";
+                return null;
+            }
+            if (documento._DocumentLineas.Count == 0)
+            {
+                cabecera.Rows[0]["FECHA"] = Convert.ToDateTime(cabecera.Rows[0]["FECHA"]).Date;
+                documento._Load_Cabecera(cabecera.Rows[0]);
+            }
+            return documento;
+        }
+
+        /// <summary>Por qué Sage no puede escribir un documento de ese ejercicio y empresa, o null si son los de su sesión.</summary>
+        private static string FueraDeLaSesion(string ejercicio, string empresa)
+        {
+            if (ejercicio != Global("wc_any"))
+                return $"Sage solo guarda documentos en su ejercicio activo ({Global("wc_any")}).";
+            if (empresa != Global("wc_empresa"))
+                return $"Sage está conectado a la empresa {Global("wc_empresa")}.";
+            return null;
+        }
+
+        /// <summary>
+        /// Mientras existe, los avisos que Sage mostraría en una ventana (no hay stock, el artículo no existe...) no se
+        /// muestran: aquí no hay pantalla ni quien los cierre, y dejarían la sesión colgada. Sage los escribe entonces en
+        /// la consola, de donde se recoge el último en <see cref="Texto"/>.
+        /// </summary>
+        private sealed class AvisosDeSage : IDisposable
+        {
+            private readonly TextWriter _consola = Console.Out;
+            private readonly object _antes = EW_GLOBAL._GetVariable("wl_nomessagebox", false);
+            private readonly StringWriter _avisos = new StringWriter();
+
+            public AvisosDeSage()
+            {
+                EW_GLOBAL.ValorEnClave_VarGlob("wl_nomessagebox", true);
+                Console.SetOut(_avisos);
+            }
+
+            /// <summary>El último aviso, sin el título de su ventana, o null si no ha habido ninguno.</summary>
+            public string Texto
+            {
+                get
+                {
+                    string todos = _avisos.ToString();
+                    int ultimo = todos.LastIndexOf("Mensaje: ", StringComparison.Ordinal);
+                    if (ultimo < 0)
+                        return null;
+
+                    string aviso = todos.Substring(ultimo);
+                    return Regex.Replace(aviso.Substring(aviso.IndexOf(" - ", StringComparison.Ordinal) + 3), @"\s+", " ").Trim();
+                }
+            }
+
+            public void Dispose()
+            {
+                Console.SetOut(_consola);
+                EW_GLOBAL.ValorEnClave_VarGlob("wl_nomessagebox", _antes);
+            }
         }
 
         /// <summary>Lo que el botón "separar reparto" copia de la cabecera, más _EmailEnviado para que la parte nueva de un reparto ya avisado no avise otra vez al cliente.</summary>

@@ -79,13 +79,10 @@ namespace S50APIService.Servicios
             if (Clave(item).Any(v => v.Value == null))
                 throw new InvalidOperationException("No se puede resolver el conflicto de intercalación entre 'Modern_Spanish_CI_AI' y 'Modern_Spanish_CS_AI' de la operación equal to.");
 
-            var parametros = new Dictionary<string, string>();
-            var valores = Clave(item).Concat(Resto(item)).Where(v => !Falta(v.Value))
-                .ToDictionary(v => "[" + v.Key + "]", v => Sql(v.Value, parametros));
-            Escribir(year, $"INSERT INTO {{venser}} ({string.Join(", ", valores.Keys)}) VALUES ({string.Join(", ", valores.Values)})", parametros);
+            FilaSql.Insertar(year, "venser", Clave(item).Concat(Resto(item)));
 
             var guardada = Guardada(year, item);
-            foreach (var campo in typeof(Venser).GetProperties().Where(c => Falta(c.GetValue(item))))
+            foreach (var campo in typeof(Venser).GetProperties().Where(c => FilaSql.Falta(c.GetValue(item))))
                 campo.SetValue(item, campo.GetValue(guardada));
         }
 
@@ -105,8 +102,8 @@ namespace S50APIService.Servicios
 
             var clave = FiltroClave(item);
             var parametros = new Dictionary<string, string>(clave.Parametros);
-            var cambios = Resto(item).Select(v => $"[{v.Key}] = {Sql(v.Value, parametros)}").ToList();
-            Escribir(year, $"UPDATE {{venser}} SET {string.Join(", ", cambios)} WHERE {clave.Condicion}", parametros);
+            var cambios = Resto(item).Select(v => $"[{v.Key}] = {FilaSql.Valor(v.Value, parametros)}").ToList();
+            FilaSql.Escribir(year, $"UPDATE {{venser}} SET {string.Join(", ", cambios)} WHERE {clave.Condicion}", parametros);
         }
 
         private static Venser Guardada(string year, Venser item)
@@ -146,38 +143,6 @@ namespace S50APIService.Servicios
             foreach (var columna in Clave(item))
                 filtro.Exacto(columna.Key, Convert.ToString(columna.Value ?? "", CultureInfo.InvariantCulture));
             return filtro;
-        }
-
-        /// <summary>True si el campo no viene en la petición: sin valor o, en una fecha obligatoria, sin fecha.</summary>
-        private static bool Falta(object valor) => valor == null || valor.Equals(default(DateTime));
-
-        /// <summary>El valor como va en la instrucción: NULL o un parámetro, que se añade a <paramref name="parametros"/>.</summary>
-        private static string Sql(object valor, Dictionary<string, string> parametros)
-        {
-            if (valor == null)
-                return "NULL";
-
-            string nombre = "@p" + parametros.Count;
-            if (valor is DateTime fecha)
-            {
-                if (fecha.Year < 1753)
-                    throw new InvalidOperationException("SqlDateTime overflow. Must be between 1/1/1753 12:00:00 AM and 12/31/9999 11:59:59 PM.");
-
-                parametros[nombre] = fecha.ToString("yyyy-MM-ddTHH:mm:ss.fff");
-                return $"CONVERT(datetime, {nombre}, 126)";
-            }
-
-            parametros[nombre] = valor is bool si ? (si ? "1" : "0") : Convert.ToString(valor, CultureInfo.InvariantCulture);
-            return nombre;
-        }
-
-        /// <summary>
-        /// Escribe en venser por la capa de datos de Sage. La sesión de Sage tiene ANSI_WARNINGS apagado: se enciende para
-        /// que un valor que no cabe en su columna sea un error de SQL Server, como con EF, y no se guarde cortado.
-        /// </summary>
-        private static void Escribir(string year, string sql, Dictionary<string, string> parametros)
-        {
-            Contexto.Escritor.Ejecutar(year, "SET ANSI_WARNINGS ON; " + sql + "; SET ANSI_WARNINGS OFF;", parametros);
         }
     }
 }

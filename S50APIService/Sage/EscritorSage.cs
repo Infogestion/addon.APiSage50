@@ -51,5 +51,32 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.AnularVentaSerie(ejercicio, empresa, albaran, letra, linea, articulo, serie), _timeout,
                 $"anular la venta de la serie {serie} en el albarán {ejercicio}/{empresa}/{albaran}");
         }
+
+        /// <summary>Ver <see cref="TrabajadorSage.NuevoNumeroTraspaso"/>.</summary>
+        public string NuevoNumeroTraspaso(string ejercicio, string empresa, out string numero)
+        {
+            string reservado = null;
+            string motivo = _sesion.Ejecutar(t => t.NuevoNumeroTraspaso(ejercicio, empresa, out reservado), _timeout,
+                $"reservar un número de traspaso en {ejercicio}/{empresa}");
+            numero = reservado;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaTraspaso"/>.</summary>
+        public string AnadirLineaTraspaso(string ejercicio, string empresa, string numero, string articulo, decimal unidades, string[] series, out int linea)
+        {
+            int nueva = 0;
+            string motivo = _sesion.Ejecutar(t => t.AnadirLineaTraspaso(ejercicio, empresa, numero, articulo, unidades, series, out nueva), _timeout,
+                $"añadir una línea al traspaso {ejercicio}/{empresa}/{numero}");
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarTraspaso"/>.</summary>
+        public string BorrarTraspaso(string ejercicio, string empresa, string numero)
+        {
+            return _sesion.Ejecutar(t => t.BorrarTraspaso(ejercicio, empresa, numero), _timeout,
+                $"borrar el traspaso {ejercicio}/{empresa}/{numero}");
+        }
     }
 }
