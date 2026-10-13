@@ -969,6 +969,120 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
+        /// Añade una línea a un albarán de venta como al teclearla en Sage: le pone el precio de la tarifa del cliente y el
+        /// IVA del artículo, descuenta sus unidades del stock del almacén del albarán y recalcula los totales. El precio y
+        /// los descuentos que se indican sustituyen a los de Sage, y sin <paramref name="definicion"/> queda el nombre del
+        /// artículo. Sin <paramref name="articulo"/> la línea es una nota: solo lleva la descripción. Devuelve null y el
+        /// número de la línea en <paramref name="linea"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string AnadirLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, string articulo, decimal unidades, decimal? precio,
+            decimal? dto1, decimal? dto2, string definicion, out int linea)
+        {
+            int nueva = 0;
+            string motivo = CambiarAlbaranVenta(ejercicio, empresa, numero, letra, abierto =>
+            {
+                var documento = (ewDocVentaTPV)abierto;
+                bool nota = string.IsNullOrWhiteSpace(articulo);
+                if (!nota)
+                {
+                    string noAdmitido = SoloEnSage(articulo, documento._Cabecera._Fecha, "venderlo");
+                    if (noAdmitido != null)
+                        return noAdmitido;
+                }
+
+                var lineaNueva = documento._AddLinea(-1);
+                if (nota)
+                {
+                    lineaNueva._Definicion = definicion;
+                }
+                else
+                {
+                    lineaNueva._Articulo = articulo;
+                    lineaNueva._Unidades = unidades;
+                    if (string.IsNullOrWhiteSpace(lineaNueva._Articulo) || lineaNueva._Unidades != unidades)
+                    {
+                        lineaNueva._Delete(false);
+                        return "Sage no ha aceptado la línea.";
+                    }
+                    if (precio != null)
+                        lineaNueva._Precio = precio.Value;
+                    if (dto1 != null)
+                        lineaNueva._Dto1 = dto1.Value;
+                    if (dto2 != null)
+                        lineaNueva._Dto2 = dto2.Value;
+                    if (!string.IsNullOrWhiteSpace(definicion))
+                        lineaNueva._Definicion = definicion;
+                }
+                if (!documento._Save())
+                    return Motivo(documento);
+
+                nueva = lineaNueva._Linea;
+                return null;
+            });
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia las unidades, el precio, los dos descuentos y la descripción de una línea de un albarán de venta, como al
+        /// editarla en Sage, que ajusta el stock con la diferencia y recalcula el importe y los totales. Devuelve null si se
+        /// ha guardado y, si no, el motivo.
+        /// </summary>
+        public string ModificarLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, int linea, decimal unidades, decimal precio,
+            decimal dto1, decimal dto2, string definicion)
+        {
+            return CambiarAlbaranVenta(ejercicio, empresa, numero, letra, abierto =>
+            {
+                var documento = (ewDocVentaTPV)abierto;
+                var guardada = documento._Lineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+
+                if (!string.IsNullOrWhiteSpace(guardada._Articulo))
+                {
+                    guardada._Unidades = unidades;
+                    if (guardada._Unidades != unidades)
+                        return "Sage no ha aceptado las unidades.";
+                    guardada._Precio = precio;
+                    guardada._Dto1 = dto1;
+                    guardada._Dto2 = dto2;
+                }
+                if (definicion != null)
+                    guardada._Definicion = definicion;
+
+                return documento._Save() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Borra una línea de un albarán de venta como al borrarla en Sage, que devuelve sus unidades al stock y recalcula
+        /// los totales. La cabecera se queda aunque fuera la última línea. Devuelve null si se ha borrado y, si no, el
+        /// motivo.
+        /// </summary>
+        public string BorrarLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, int linea)
+        {
+            return CambiarAlbaranVenta(ejercicio, empresa, numero, letra, abierto =>
+            {
+                var documento = (ewDocVentaTPV)abierto;
+                var guardada = documento._Lineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+                if (!guardada._Delete(false))
+                    return Motivo(documento);
+
+                // Sage borra la cabecera al guardar un albarán sin líneas: si era la última, solo se guarda la cabecera.
+                if (!documento._Documento_Vacio())
+                    return documento._Save() ? null : Motivo(documento);
+                GuardarCabeceraVenta(documento);
+                return null;
+            });
+        }
+
+        /// <summary>
         /// Abre el albarán de venta (ewDocVentaTPV), le hace el <paramref name="cambio"/> y lo descarga. Devuelve null si el
         /// cambio se ha hecho; si no, el aviso que Sage habría mostrado en pantalla o, si no ha habido ninguno, el motivo
         /// que da el propio cambio.

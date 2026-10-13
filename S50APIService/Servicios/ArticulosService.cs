@@ -88,6 +88,24 @@ namespace S50APIService.Servicios
             }.Pagina(page, pagesize));
         }
 
+        /// <summary>
+        /// Los artículos de las líneas de un albarán de venta (uno por línea); sin <paramref name="emptyArticles"/>, solo
+        /// los de las líneas que tienen descripción.
+        /// </summary>
+        public static ListaJson SelectDAlbven(string year, int page, int pagesize, string empresa, string numero, string letra, bool emptyArticles)
+        {
+            var filtro = new Filtro { ["d.EMPRESA"] = empresa, ["d.NUMERO"] = numero, ["d.LETRA"] = letra };
+            if (!emptyArticles)
+                filtro.Distinto("d.ARTICULO", "").Distinto("d.DEFINICION", "");
+
+            return Db.Lector.LeerEjercicioJson<Articulo>(year, new Consulta
+            {
+                Origen = Tabla + " INNER JOIN {d_albven} AS [d] ON [a].[CODIGO] = [d].[ARTICULO]",
+                Alias = "a",
+                Filtro = filtro,
+            }.Pagina(page, pagesize));
+        }
+
         /// <summary>Los artículos de las líneas de un albarán de compra (uno por línea).</summary>
         public static ListaJson SelectDAlbcom(string year, int page, int pagesize, string empresa, string numero, string proveed)
         {

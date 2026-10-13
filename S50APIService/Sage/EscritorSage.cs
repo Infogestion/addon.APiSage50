@@ -181,6 +181,32 @@ namespace S50APIService.Sage
                 $"borrar el albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
         }
 
+        /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaAlbaranVenta"/>.</summary>
+        public string AnadirLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, string articulo, decimal unidades, decimal? precio,
+            decimal? dto1, decimal? dto2, string definicion, out int linea)
+        {
+            int nueva = 0;
+            string motivo = _sesion.Ejecutar(t => t.AnadirLineaAlbaranVenta(ejercicio, empresa, numero, letra, articulo, unidades, precio, dto1, dto2, definicion, out nueva),
+                _timeout, $"añadir una línea al albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarLineaAlbaranVenta"/>.</summary>
+        public string ModificarLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, int linea, decimal unidades, decimal precio,
+            decimal dto1, decimal dto2, string definicion)
+        {
+            return _sesion.Ejecutar(t => t.ModificarLineaAlbaranVenta(ejercicio, empresa, numero, letra, linea, unidades, precio, dto1, dto2, definicion), _timeout,
+                $"modificar la línea {linea} del albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarLineaAlbaranVenta"/>.</summary>
+        public string BorrarLineaAlbaranVenta(string ejercicio, string empresa, string numero, string letra, int linea)
+        {
+            return _sesion.Ejecutar(t => t.BorrarLineaAlbaranVenta(ejercicio, empresa, numero, letra, linea), _timeout,
+                $"borrar la línea {linea} del albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
+        }
+
         /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaAlbaranCompra"/>.</summary>
         public string AnadirLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string articulo, decimal unidades, string definicion,
             out int linea)
