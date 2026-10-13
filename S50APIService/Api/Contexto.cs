@@ -15,5 +15,8 @@ namespace S50APIService.Api
 
         /// <summary>Nombre con el que Sage conoce al addon Nadilux SGA (SageAddonSga en App.config).</summary>
         public static string AddonSga { get; set; }
+
+        /// <summary>Forma de pago de los albaranes de venta que se crean sin ella para un cliente que tampoco la tiene (FormaPagoPorDefecto en App.config).</summary>
+        public static string FormaPagoPorDefecto { get; set; }
     }
 }

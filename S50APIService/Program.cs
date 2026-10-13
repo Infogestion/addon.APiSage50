@@ -30,6 +30,7 @@ namespace S50APIService
             Contexto.Jwt = new ServicioJwt(cfg["JwtClave"]);
             Contexto.Usuarios = new UsuariosApi(cfg);
             Contexto.AddonSga = cfg["SageAddonSga"];
+            Contexto.FormaPagoPorDefecto = cfg["FormaPagoPorDefecto"];
 
             Console.WriteLine($"S50APIService · terminal {terminal} · grupo {grupo} · empresa {empresa}");
             if (Contexto.Jwt.ClaveTemporal)

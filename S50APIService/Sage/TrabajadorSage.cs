@@ -864,6 +864,152 @@ namespace S50APIService.Sage
             });
         }
 
+        /// <summary>
+        /// Crea la cabecera de un albarán de venta como al darlo de alta en Sage, que le da el siguiente número de la serie
+        /// y le pone la forma de pago, el vendedor, los giros y los portes del cliente. El almacén, el vendedor, la forma
+        /// de pago y el operario que se indican sustituyen a los que pone Sage. Devuelve null y el número en
+        /// <paramref name="numero"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string NuevoAlbaranVenta(string ejercicio, string empresa, string letra, string cliente, string almacen, string vendedor, string fpag, string operario,
+            DateTime fecha, string observaciones, out string numero)
+        {
+            string creado = null;
+            string motivo = EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = new ewDocVentaTPV { _MostrarMensajes = true };
+                    if (!documento._New(empresa, letra, ""))
+                        return avisos.Texto ?? Motivo(documento);
+                    try
+                    {
+                        documento._Cabecera._Cliente = cliente;
+                        if (documento._Cabecera._Cliente.Trim() != cliente.Trim())
+                        {
+                            documento._Delete();
+                            return avisos.Texto ?? "Sage no ha aceptado el cliente.";
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(almacen))
+                            documento._Cabecera._Almacen = almacen;
+                        if (!string.IsNullOrWhiteSpace(vendedor))
+                            documento._Cabecera._Vendedor = vendedor;
+                        if (!string.IsNullOrWhiteSpace(fpag))
+                            documento._Cabecera._FormaPago = fpag;
+                        if (!string.IsNullOrWhiteSpace(operario))
+                            documento._Cabecera._Operario = operario;
+                        documento._Cabecera._Fecha = fecha;
+                        documento._Cabecera._Observacio = observaciones;
+                        GuardarCabeceraVenta(documento);
+                        creado = documento._Numero;
+                        return null;
+                    }
+                    finally
+                    {
+                        documento._DescargarDatos();
+                    }
+                }
+            });
+            numero = creado;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia las observaciones de un albarán de venta y, si se indican, su almacén, su fecha y su operario, como al
+        /// editarlo en Sage. Si el albarán tiene líneas, el almacén y la fecha tienen que ser los que ya tiene: cambiarlos
+        /// movería el stock de sus líneas. Devuelve null si se ha guardado y, si no, el motivo.
+        /// </summary>
+        public string ModificarAlbaranVenta(string ejercicio, string empresa, string numero, string letra, string almacen, DateTime? fecha, string operario,
+            string observaciones)
+        {
+            return CambiarAlbaranVenta(ejercicio, empresa, numero, letra, abierto =>
+            {
+                var documento = (ewDocVentaTPV)abierto;
+                bool conLineas = !documento._Documento_Vacio();
+                if (almacen != null && documento._Cabecera._Almacen.Trim() != almacen.Trim())
+                {
+                    if (conLineas)
+                        return "No se puede cambiar el almacén de un albarán de venta que tiene líneas.";
+                    documento._Cabecera._Almacen = almacen;
+                }
+                if (fecha != null && documento._Cabecera._Fecha.Date != fecha.Value.Date)
+                {
+                    if (conLineas)
+                        return "No se puede cambiar la fecha de un albarán de venta que tiene líneas.";
+                    documento._Cabecera._Fecha = fecha.Value;
+                }
+                if (operario != null)
+                    documento._Cabecera._Operario = operario;
+                documento._Cabecera._Observacio = observaciones;
+
+                // Sage borra la cabecera al guardar un albarán sin líneas: de ese solo se guarda la cabecera.
+                if (conLineas)
+                    return documento._Save() ? null : Motivo(documento);
+                GuardarCabeceraVenta(documento);
+                return null;
+            });
+        }
+
+        /// <summary>
+        /// Borra un albarán de venta como el botón de borrar de Sage, con sus mismas comprobaciones (facturado, cobrado, en
+        /// un arqueo de caja): quita cada línea devolviendo sus unidades al stock y al pedido, y después la cabecera con
+        /// sus giros y portes. Devuelve null si se ha borrado y, si no, el motivo.
+        /// </summary>
+        public string BorrarAlbaranVenta(string ejercicio, string empresa, string numero, string letra)
+        {
+            return CambiarAlbaranVenta(ejercicio, empresa, numero, letra, abierto =>
+            {
+                var documento = (ewDocVentaTPV)abierto;
+                return documento._Comprobaciones_Antes_Delete_Documento(false) && documento._Delete() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Abre el albarán de venta (ewDocVentaTPV), le hace el <paramref name="cambio"/> y lo descarga. Devuelve null si el
+        /// cambio se ha hecho; si no, el aviso que Sage habría mostrado en pantalla o, si no ha habido ninguno, el motivo
+        /// que da el propio cambio.
+        /// </summary>
+        private string CambiarAlbaranVenta(string ejercicio, string empresa, string numero, string letra, Func<object, string> cambio)
+        {
+            return EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = new ewDocVentaTPV { _MostrarMensajes = true };
+                    if (!documento._Load(empresa, numero.Trim().PadLeft(10), letra))
+                        return avisos.Texto ?? "No se encontró el albarán de venta.";
+                    try
+                    {
+                        if (documento._EnUso)
+                            return "El albarán de venta está abierto en Sage: no se ha cambiado.";
+                        if (documento._Solo_Lectura || !string.IsNullOrWhiteSpace(documento._Cabecera._Factura))
+                            return "El albarán de venta está facturado o es de solo lectura en Sage: no se ha cambiado.";
+
+                        string motivo = cambio(documento);
+                        return motivo == null ? null : avisos.Texto ?? motivo;
+                    }
+                    finally
+                    {
+                        documento._DescargarDatos();
+                    }
+                }
+            });
+        }
+
+        /// <summary>Guarda solo la cabecera del albarán de venta. El parámetro es object porque las clases de Sage no pueden aparecer en la firma de ningún método de esta clase.</summary>
+        private static void GuardarCabeceraVenta(object documento)
+        {
+            typeof(ewDocVentaTPV).GetMethod("_Save_Capsalera", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(documento, null);
+        }
+
         /// <summary>La extensión que el addon FERRETERIATIA engancha a los albaranes de compra, y su clase de expedientes (tabla con_albacom).</summary>
         private const string ExtensionFerreteria = "sage.addons.FerreteriaTia.Negocio.Documentos.ExtAlbCompra";
         private const string ExpedientesFerreteria = "sage.addons.FerreteriaTia.Negocio.Clases.AddonDbCon_Albacom";

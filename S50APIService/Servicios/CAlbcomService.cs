@@ -138,7 +138,7 @@ namespace S50APIService.Servicios
         /// interface.s50c. Las fechas se redondean al milisegundo, como al pasar a SQL Server en interface.s50c: el último
         /// instante de un día se convierte en las 00:00 del día siguiente.
         /// </summary>
-        private static Filtro EntreFechas(DateTime datefrom, DateTime dateto)
+        public static Filtro EntreFechas(DateTime datefrom, DateTime dateto)
         {
             if (datefrom.Year < 1753 || dateto.Year < 1753)
                 throw new InvalidOperationException("SqlDateTime overflow. Must be between 1/1/1753 12:00:00 AM and 12/31/9999 11:59:59 PM.");

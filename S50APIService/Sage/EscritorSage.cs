@@ -155,6 +155,32 @@ namespace S50APIService.Sage
                 $"borrar el albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
         }
 
+        /// <summary>Ver <see cref="TrabajadorSage.NuevoAlbaranVenta"/>.</summary>
+        public string NuevoAlbaranVenta(string ejercicio, string empresa, string letra, string cliente, string almacen, string vendedor, string fpag, string operario,
+            DateTime fecha, string observaciones, out string numero)
+        {
+            string creado = null;
+            string motivo = _sesion.Ejecutar(t => t.NuevoAlbaranVenta(ejercicio, empresa, letra, cliente, almacen, vendedor, fpag, operario, fecha, observaciones, out creado),
+                _timeout, $"crear un albarán de venta del cliente {cliente} en {ejercicio}/{empresa}/{letra}");
+            numero = creado;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarAlbaranVenta"/>.</summary>
+        public string ModificarAlbaranVenta(string ejercicio, string empresa, string numero, string letra, string almacen, DateTime? fecha, string operario,
+            string observaciones)
+        {
+            return _sesion.Ejecutar(t => t.ModificarAlbaranVenta(ejercicio, empresa, numero, letra, almacen, fecha, operario, observaciones), _timeout,
+                $"modificar el albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarAlbaranVenta"/>.</summary>
+        public string BorrarAlbaranVenta(string ejercicio, string empresa, string numero, string letra)
+        {
+            return _sesion.Ejecutar(t => t.BorrarAlbaranVenta(ejercicio, empresa, numero, letra), _timeout,
+                $"borrar el albarán de venta {ejercicio}/{empresa}/{letra}/{numero}");
+        }
+
         /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaAlbaranCompra"/>.</summary>
         public string AnadirLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string articulo, decimal unidades, string definicion,
             out int linea)
