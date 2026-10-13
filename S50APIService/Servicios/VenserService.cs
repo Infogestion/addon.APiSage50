@@ -100,10 +100,7 @@ namespace S50APIService.Servicios
             if (Guardada(year, item) == null)
                 throw new InvalidOperationException("Value cannot be null. (Parameter 'propertyValues')");
 
-            var clave = FiltroClave(item);
-            var parametros = new Dictionary<string, string>(clave.Parametros);
-            var cambios = Resto(item).Select(v => $"[{v.Key}] = {FilaSql.Valor(v.Value, parametros)}").ToList();
-            FilaSql.Escribir(year, $"UPDATE {{venser}} SET {string.Join(", ", cambios)} WHERE {clave.Condicion}", parametros);
+            FilaSql.Actualizar(year, "venser", FiltroClave(item), Resto(item));
         }
 
         private static Venser Guardada(string year, Venser item)

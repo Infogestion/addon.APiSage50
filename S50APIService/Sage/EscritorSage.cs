@@ -78,5 +78,53 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.BorrarTraspaso(ejercicio, empresa, numero), _timeout,
                 $"borrar el traspaso {ejercicio}/{empresa}/{numero}");
         }
+
+        /// <summary>Ver <see cref="TrabajadorSage.NuevoNumeroRegularizacion"/>.</summary>
+        public string NuevoNumeroRegularizacion(string ejercicio, string empresa, out string numero)
+        {
+            string reservado = null;
+            string motivo = _sesion.Ejecutar(t => t.NuevoNumeroRegularizacion(ejercicio, empresa, out reservado), _timeout,
+                $"reservar un número de regularización en {ejercicio}/{empresa}");
+            numero = reservado;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarRegularizacion"/>.</summary>
+        public string ModificarRegularizacion(string ejercicio, string empresa, string numero, DateTime fecha, string operario, string tipo, string observaciones)
+        {
+            return _sesion.Ejecutar(t => t.ModificarRegularizacion(ejercicio, empresa, numero, fecha, operario, tipo, observaciones), _timeout,
+                $"modificar la regularización {ejercicio}/{empresa}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaRegularizacion"/>.</summary>
+        public string AnadirLineaRegularizacion(string ejercicio, string empresa, string numero, string articulo, decimal unidades, out int linea)
+        {
+            int nueva = 0;
+            string motivo = _sesion.Ejecutar(t => t.AnadirLineaRegularizacion(ejercicio, empresa, numero, articulo, unidades, out nueva), _timeout,
+                $"añadir una línea a la regularización {ejercicio}/{empresa}/{numero}");
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarLineaRegularizacion"/>.</summary>
+        public string ModificarLineaRegularizacion(string ejercicio, string empresa, string numero, int linea, string articulo, decimal unidades)
+        {
+            return _sesion.Ejecutar(t => t.ModificarLineaRegularizacion(ejercicio, empresa, numero, linea, articulo, unidades), _timeout,
+                $"modificar la línea {linea} de la regularización {ejercicio}/{empresa}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarLineaRegularizacion"/>.</summary>
+        public string BorrarLineaRegularizacion(string ejercicio, string empresa, string numero, int linea)
+        {
+            return _sesion.Ejecutar(t => t.BorrarLineaRegularizacion(ejercicio, empresa, numero, linea), _timeout,
+                $"borrar la línea {linea} de la regularización {ejercicio}/{empresa}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarRegularizacion"/>.</summary>
+        public string BorrarRegularizacion(string ejercicio, string empresa, string numero)
+        {
+            return _sesion.Ejecutar(t => t.BorrarRegularizacion(ejercicio, empresa, numero), _timeout,
+                $"borrar la regularización {ejercicio}/{empresa}/{numero}");
+        }
     }
 }

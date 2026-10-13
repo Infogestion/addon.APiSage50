@@ -36,6 +36,14 @@ namespace S50APIService.Servicios
             Escribir(year, $"INSERT INTO {{{tabla}}} ({string.Join(", ", valores.Keys)}) VALUES ({string.Join(", ", valores.Values)})", parametros);
         }
 
+        /// <summary>Cambia esas columnas en las filas que cumplen el filtro, como el UPDATE de EF.</summary>
+        public static void Actualizar(string year, string tabla, Filtro filtro, IEnumerable<KeyValuePair<string, object>> columnas)
+        {
+            var parametros = new Dictionary<string, string>(filtro.Parametros);
+            var cambios = columnas.Select(c => $"[{c.Key}] = {Valor(c.Value, parametros)}").ToList();
+            Escribir(year, $"UPDATE {{{tabla}}} SET {string.Join(", ", cambios)} WHERE {filtro.Condicion}", parametros);
+        }
+
         /// <summary>True si el campo no viene en la petición: sin valor o, en una fecha obligatoria, sin fecha.</summary>
         public static bool Falta(object valor) => valor == null || valor.Equals(default(DateTime));
 

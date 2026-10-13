@@ -14,6 +14,9 @@ namespace S50APIService.Servicios
     {
         private const string Tabla = "{articulo} AS [a]";
 
+        /// <summary>La condición, como la genera EF, de que el artículo no tiene fila en stocks2 (alias [s]) tras un LEFT JOIN.</summary>
+        private const string SinStock = "(((([s].[EMPRESA] IS NULL) OR ([s].[ARTICULO] IS NULL)) OR ([s].[TALLA] IS NULL)) OR ([s].[COLOR] IS NULL)) OR ([s].[ALMACEN] IS NULL)";
+
         public static ListaJson Select(string year, int page, int pagesize)
         {
             return Db.Lector.LeerEjercicioJson<Articulo>(year, Articulos().Pagina(page, pagesize));
@@ -36,13 +39,52 @@ namespace S50APIService.Servicios
         /// <summary>Los artículos con su stock en un almacén (0 si no tienen ninguna fila de stock).</summary>
         public static ListaJson SelectWithStockByWarehouse(string year, int page, int pagesize, string warehouse)
         {
-            const string sinStock = "(((([s].[EMPRESA] IS NULL) OR ([s].[ARTICULO] IS NULL)) OR ([s].[TALLA] IS NULL)) OR ([s].[COLOR] IS NULL)) OR ([s].[ALMACEN] IS NULL)";
             return Db.Lector.LeerEjercicioJson<ArticuloWithStock>(year, new Consulta
             {
                 Origen = Tabla + " LEFT JOIN {stocks2} AS [s] ON [a].[CODIGO] = [s].[ARTICULO]",
                 Alias = "a",
                 Expresiones = new Dictionary<string, string> { ["STOCKBYALMACEN"] = Stocks2Service.SiHayStock("[s].[FINAL]", "0.0") },
-                Filtro = new Filtro().Sql("(" + sinStock + ") OR (LTRIM(RTRIM([s].[ALMACEN])) = {0})", warehouse.Trim()),
+                Filtro = new Filtro().Sql("(" + SinStock + ") OR (LTRIM(RTRIM([s].[ALMACEN])) = {0})", warehouse.Trim()),
+            }.Pagina(page, pagesize));
+        }
+
+        /// <summary>El artículo una vez por cada almacén en el que tiene fila de stock, con ese stock; sin ninguna, una vez con almacén vacío y stock 0.</summary>
+        public static List<ArticuloWithStockAndAlmacen> SelectWithStockByArticulo(string year, string code)
+        {
+            return Db.Lector.LeerEjercicio<ArticuloWithStockAndAlmacen>(year, new Consulta
+            {
+                Origen = Tabla + " LEFT JOIN {stocks2} AS [s] ON [a].[CODIGO] = [s].[ARTICULO]",
+                Alias = "a",
+                Expresiones = new Dictionary<string, string>
+                {
+                    ["ALMACEN"] = Stocks2Service.SiHayStock("[s].[ALMACEN]", "''"),
+                    ["STOCKBYALMACEN"] = Stocks2Service.SiHayStock("[s].[FINAL]", "0.0"),
+                },
+                Filtro = new Filtro { ["a.CODIGO"] = code },
+            });
+        }
+
+        /// <summary>Los artículos de las líneas de un albarán de regularización (uno por línea).</summary>
+        public static ListaJson SelectDAlbare(string year, int page, int pagesize, string empresa, string numero)
+        {
+            return Db.Lector.LeerEjercicioJson<Articulo>(year, new Consulta
+            {
+                Origen = Tabla + " INNER JOIN {d_albare} AS [d] ON [a].[CODIGO] = [d].[ARTICULO]",
+                Alias = "a",
+                Filtro = new Filtro { ["d.EMPRESA"] = empresa, ["d.NUMERO"] = numero },
+            }.Pagina(page, pagesize));
+        }
+
+        /// <summary>Los artículos de las líneas de un albarán de regularización con su stock en un almacén (0 si no tienen ninguna fila de stock).</summary>
+        public static ListaJson SelectDAlbareWithStockByWarehouse(string year, int page, int pagesize, string empresa, string numero, string warehouse)
+        {
+            return Db.Lector.LeerEjercicioJson<ArticuloWithStock>(year, new Consulta
+            {
+                Origen = Tabla + " LEFT JOIN {stocks2} AS [s] ON [a].[CODIGO] = [s].[ARTICULO] INNER JOIN {d_albare} AS [d] ON [a].[CODIGO] = [d].[ARTICULO]",
+                Alias = "a",
+                Expresiones = new Dictionary<string, string> { ["STOCKBYALMACEN"] = Stocks2Service.SiHayStock("[s].[FINAL]", "0.0") },
+                Filtro = new Filtro().Sql("(" + SinStock + ") OR (LTRIM(RTRIM([s].[ALMACEN])) = {0})", warehouse.Trim())
+                    .Igual("d.EMPRESA", empresa).Igual("d.NUMERO", numero),
             }.Pagina(page, pagesize));
         }
 

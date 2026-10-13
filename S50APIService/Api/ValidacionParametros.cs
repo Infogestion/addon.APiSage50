@@ -21,6 +21,16 @@ namespace S50APIService.Api
     }
 
     /// <summary>
+    /// Marca una fecha de la query que en interface.s50c no admite null (un DateTime opcional): vacía es un 400 y, si
+    /// falta, llega null (allí la fecha 0001-01-01). Se declara "DateTime? x = null" porque .NET Framework no sabe leer
+    /// el valor por defecto de un parámetro "DateTime x = default".
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class NoAnulableAttribute : Attribute
+    {
+    }
+
+    /// <summary>
     /// Valida los parámetros de las acciones como un [ApiController] de ASP.NET Core y responde su mismo 400:
     /// los int, los bool, los decimal y las fechas de la query (p. ej. page, pageSize o fecha) que no se pueden convertir, con
     /// "The value 'x' is not valid." (o "is invalid." si viene vacío), en vez de seguir con el valor por defecto como hace
@@ -75,7 +85,7 @@ namespace S50APIService.Api
                 }
 
                 var tipo = Nullable.GetUnderlyingType(parametro.ParameterType);
-                bool admiteNull = tipo != null;
+                bool admiteNull = tipo != null && parametro.GetCustomAttributes<NoAnulableAttribute>().Count == 0;
                 if (enRuta || !Conversores.TryGetValue(tipo ?? parametro.ParameterType, out var conversor))
                     continue;
 

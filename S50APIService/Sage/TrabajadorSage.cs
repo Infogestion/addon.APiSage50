@@ -412,7 +412,7 @@ namespace S50APIService.Sage
                     if (!ficha._UsaSeries && series.Length > 0)
                         return "El artículo no trabaja con series.";
 
-                    var documento = (StockAlbTraspaso)AbrirTraspaso(ejercicio, empresa, numero, out string cerrado);
+                    var documento = (StockAlbTraspaso)AbrirDocumentoStock(new StockAlbTraspaso(), "C_ALBATR", "traspaso", ejercicio, empresa, numero, out string cerrado);
                     if (documento == null)
                         return cerrado;
                     try
@@ -461,7 +461,7 @@ namespace S50APIService.Sage
             {
                 using (var avisos = new AvisosDeSage())
                 {
-                    var documento = (StockAlbTraspaso)AbrirTraspaso(ejercicio, empresa, numero, out string cerrado);
+                    var documento = (StockAlbTraspaso)AbrirDocumentoStock(new StockAlbTraspaso(), "C_ALBATR", "traspaso", ejercicio, empresa, numero, out string cerrado);
                     if (documento == null)
                         return cerrado;
                     try
@@ -477,35 +477,228 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// El albarán de traspaso (StockAlbTraspaso) cargado y bloqueado para cambiarlo, o null y el motivo. Sage solo carga
-        /// la cabecera de los traspasos que tienen líneas; la de uno que aún no tiene ninguna se le da leída de c_albatr,
-        /// con la fecha sin hora, que es como Sage la guarda y como apunta el stock.
+        /// Reserva el siguiente número de albarán de regularización con la clase de regularizaciones de Sage, que lo cuenta
+        /// en la empresa y se salta los que ya existen. Devuelve null y el número en <paramref name="numero"/> o, si no se
+        /// puede, el motivo.
+        /// </summary>
+        public string NuevoNumeroRegularizacion(string ejercicio, string empresa, out string numero)
+        {
+            string reservado = null;
+            string motivo = EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                var documento = new StockAlbRegulari();
+                documento._New();
+                reservado = documento._Obten_Nuevo_Numero();
+                return string.IsNullOrWhiteSpace(reservado) ? "Sage no ha dado un número de regularización." : null;
+            });
+            numero = reservado;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia la fecha, el operario, el tipo y las observaciones de un albarán de regularización que tiene líneas, como
+        /// al editarlo en Sage; la fecha solo se puede cambiar si ninguna línea tiene unidades. El almacén no se cambia
+        /// aquí: Sage no pasa al almacén nuevo el stock de todas las líneas. Devuelve null si se ha guardado y, si no, el
+        /// motivo.
+        /// </summary>
+        public string ModificarRegularizacion(string ejercicio, string empresa, string numero, DateTime fecha, string operario, string tipo, string observaciones)
+        {
+            return CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
+            {
+                var documento = (StockAlbRegulari)abierto;
+                if (documento._Fecha.Value.Date != fecha)
+                    documento._Fecha = fecha;
+                if (documento._Fecha.Value.Date != fecha)
+                    return "Sage no permite cambiar la fecha de un albarán de regularización que tiene líneas con unidades.";
+
+                documento._Operario = operario;
+                documento._TipoRegularizacion = tipo;
+                documento._Observaciones = observaciones;
+                return documento._Save() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Añade una línea a un albarán de regularización como al teclearla en Sage: guarda la línea con el coste del
+        /// artículo según la valoración de la empresa y descuenta sus unidades del stock del almacén (las suma si son
+        /// negativas). Devuelve null y el número de la línea en <paramref name="linea"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string AnadirLineaRegularizacion(string ejercicio, string empresa, string numero, string articulo, decimal unidades, out int linea)
+        {
+            int nueva = 0;
+            string motivo = CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
+            {
+                var documento = (StockAlbRegulari)abierto;
+                string noAdmitido = NoRegularizable(articulo, documento._Fecha);
+                if (noAdmitido != null)
+                    return noAdmitido;
+
+                var lineaNueva = documento._AddLinea(-1);
+                lineaNueva._Articulo = articulo;
+                lineaNueva._Unidades = unidades;
+                if (string.IsNullOrWhiteSpace(lineaNueva._Articulo) || lineaNueva._Unidades != unidades)
+                {
+                    lineaNueva._Delete();
+                    return "Sage no ha aceptado la línea.";
+                }
+                if (!documento._Save())
+                    return Motivo(documento);
+
+                nueva = lineaNueva._Linea;
+                return null;
+            });
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia el artículo y las unidades de una línea de un albarán de regularización como al editarla en Sage, que
+        /// ajusta el stock con la diferencia. Devuelve null si se ha guardado y, si no, el motivo.
+        /// </summary>
+        public string ModificarLineaRegularizacion(string ejercicio, string empresa, string numero, int linea, string articulo, decimal unidades)
+        {
+            return CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
+            {
+                var documento = (StockAlbRegulari)abierto;
+                var guardada = documento._DocumentLineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+
+                if (guardada._Articulo.Trim() != articulo)
+                {
+                    string noAdmitido = NoRegularizable(articulo, documento._Fecha);
+                    if (noAdmitido != null)
+                        return noAdmitido;
+                    guardada._Articulo = articulo;
+                }
+                guardada._Unidades = unidades;
+                if (guardada._Articulo.Trim() != articulo || guardada._Unidades != unidades)
+                    return "Sage no ha aceptado el cambio.";
+
+                return documento._Save() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Borra una línea de un albarán de regularización como al borrarla en Sage, que devuelve sus unidades al stock.
+        /// La cabecera se queda aunque fuera la última línea. Devuelve null si se ha borrado y, si no, el motivo.
+        /// </summary>
+        public string BorrarLineaRegularizacion(string ejercicio, string empresa, string numero, int linea)
+        {
+            return CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
+            {
+                var documento = (StockAlbRegulari)abierto;
+                var guardada = documento._DocumentLineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+
+                return guardada._Delete() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Borra un albarán de regularización como el botón de borrar de Sage: quita cada línea devolviendo sus unidades al
+        /// stock y después la cabecera. Devuelve null si se ha borrado y, si no, el motivo.
+        /// </summary>
+        public string BorrarRegularizacion(string ejercicio, string empresa, string numero)
+        {
+            return CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
+            {
+                var documento = (StockAlbRegulari)abierto;
+                return documento._Delete() ? null : Motivo(documento);
+            });
+        }
+
+        private const string LineaSoloEnSage = "La línea es de un artículo con series o de un escandallo: hay que cambiarla en Sage.";
+
+        /// <summary>
+        /// Abre el albarán de regularización (StockAlbRegulari), le hace el <paramref name="cambio"/> y lo desbloquea.
+        /// Devuelve null si el cambio se ha hecho; si no, el aviso que Sage habría mostrado en pantalla o, si no ha habido
+        /// ninguno, el motivo que da el propio cambio.
+        /// </summary>
+        private string CambiarRegularizacion(string ejercicio, string empresa, string numero, Func<object, string> cambio)
+        {
+            return EnSage(() =>
+            {
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = (StockAlbRegulari)AbrirDocumentoStock(new StockAlbRegulari(), "C_ALBARE", "albarán de regularización",
+                        ejercicio, empresa, numero, out string cerrado);
+                    if (documento == null)
+                        return cerrado;
+                    try
+                    {
+                        string motivo = cambio(documento);
+                        return motivo == null ? null : avisos.Texto ?? motivo;
+                    }
+                    finally
+                    {
+                        documento._Bloquear_Documento(false);
+                    }
+                }
+            });
+        }
+
+        /// <summary>
+        /// Por qué un artículo no se puede regularizar desde aquí, o null si se puede. Con series, tallas y colores, lotes o
+        /// escandallo, Sage abre una pantalla para pedir el detalle, y aquí no hay quien la conteste.
+        /// </summary>
+        private static string NoRegularizable(string articulo, DateTime? fecha)
+        {
+            var ficha = new Articulo(articulo, "", "");
+            if (!ficha._Existe_Registro())
+                return "No se encontró el artículo.";
+            if (ficha._UsaSeries)
+                return "El artículo trabaja con series: hay que regularizarlo en Sage.";
+            if (Convert.ToBoolean(ficha._Campo("lcolor")))
+                return "El artículo trabaja con tallas y colores: hay que regularizarlo en Sage.";
+            if (ficha._Con_Lotes(fecha))
+                return "El artículo trabaja con lotes: hay que regularizarlo en Sage.";
+            if (Convert.ToInt32(ficha._Campo("tipo_escan")) != 0)
+                return "El artículo es un escandallo: hay que regularizarlo en Sage.";
+            return null;
+        }
+
+        /// <summary>
+        /// Un documento de stock de Sage (traspaso o regularización) cargado y bloqueado para cambiarlo, o null y el motivo.
+        /// <paramref name="nuevo"/> es el documento recién creado de su clase, <paramref name="tabla"/> la de sus cabeceras
+        /// y <paramref name="nombre"/> cómo llamarlo en los mensajes. Sage solo carga la cabecera de los documentos que
+        /// tienen líneas; la de uno que aún no tiene ninguna se le da leída de su tabla, con la fecha sin hora, que es como
+        /// Sage la guarda y como apunta el stock.
         /// Devuelve object porque las clases de Sage no pueden aparecer en la firma de ningún método de esta clase.
         /// </summary>
-        private static object AbrirTraspaso(string ejercicio, string empresa, string numero, out string motivo)
+        private static object AbrirDocumentoStock(object nuevo, string tabla, string nombre, string ejercicio, string empresa, string numero, out string motivo)
         {
             motivo = FueraDeLaSesion(ejercicio, empresa);
             if (motivo != null)
                 return null;
 
             var cabecera = new DataTable();
-            string sql = "SELECT * FROM " + DB.SQLDatabase("GESTION", "C_ALBATR") + " WHERE EMPRESA = " + DB.SQLString(empresa)
+            string sql = "SELECT * FROM " + DB.SQLDatabase("GESTION", tabla) + " WHERE EMPRESA = " + DB.SQLString(empresa)
                 + " AND NUMERO = " + DB.SQLString(numero.Trim().PadLeft(10));
             if (!DB.SQLExec(sql, ref cabecera))
                 throw new ErrorSqlException(MensajeError(), sql);
             if (cabecera.Rows.Count == 0)
             {
-                motivo = "No se encontró el traspaso.";
+                motivo = $"No se encontró el {nombre}.";
                 return null;
             }
 
-            var documento = new StockAlbTraspaso();
+            dynamic documento = nuevo;
             documento._New();
             documento._Numero = numero;
             documento._Load();
             if (documento._EnUso)
             {
-                motivo = "El traspaso está abierto en Sage: no se ha cambiado.";
+                motivo = $"El {nombre} está abierto en Sage: no se ha cambiado.";
                 return null;
             }
             if (documento._DocumentLineas.Count == 0)
