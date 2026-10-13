@@ -11,7 +11,7 @@ namespace S50APIService.Servicios
     internal static class CAlbcomService
     {
         /// <summary>El usuario con el que interface.s50c firma los documentos que crea.</summary>
-        private const string Usuario = "INTERFACES_S50C          ";
+        public const string Usuario = "INTERFACES_S50C          ";
 
         public static List<CAlbcom> Select(string year, int page, int pagesize)
         {

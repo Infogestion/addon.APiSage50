@@ -88,6 +88,17 @@ namespace S50APIService.Servicios
             }.Pagina(page, pagesize));
         }
 
+        /// <summary>Los artículos de las líneas de un albarán de compra (uno por línea).</summary>
+        public static ListaJson SelectDAlbcom(string year, int page, int pagesize, string empresa, string numero, string proveed)
+        {
+            return Db.Lector.LeerEjercicioJson<Articulo>(year, new Consulta
+            {
+                Origen = Tabla + " INNER JOIN {d_albcom} AS [d] ON [a].[CODIGO] = [d].[ARTICULO]",
+                Alias = "a",
+                Filtro = new Filtro { ["d.EMPRESA"] = empresa, ["d.NUMERO"] = numero, ["d.PROVEEDOR"] = proveed },
+            }.Pagina(page, pagesize));
+        }
+
         public static ListaJson SelectByBarras(string year, string codigo)
         {
             return Db.Lector.LeerEjercicioJson<Articulo>(year, new Consulta

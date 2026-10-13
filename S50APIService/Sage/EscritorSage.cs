@@ -154,5 +154,31 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.BorrarAlbaranCompra(ejercicio, empresa, proveedor, numero), _timeout,
                 $"borrar el albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
         }
+
+        /// <summary>Ver <see cref="TrabajadorSage.AnadirLineaAlbaranCompra"/>.</summary>
+        public string AnadirLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string articulo, decimal unidades, string definicion,
+            out int linea)
+        {
+            int nueva = 0;
+            string motivo = _sesion.Ejecutar(t => t.AnadirLineaAlbaranCompra(ejercicio, empresa, proveedor, numero, articulo, unidades, definicion, out nueva), _timeout,
+                $"añadir una línea al albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarLineaAlbaranCompra"/>.</summary>
+        public string ModificarLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, int linea, decimal unidades, decimal? precio = null,
+            decimal? dto1 = null, decimal? dto2 = null, string definicion = null)
+        {
+            return _sesion.Ejecutar(t => t.ModificarLineaAlbaranCompra(ejercicio, empresa, proveedor, numero, linea, unidades, precio, dto1, dto2, definicion), _timeout,
+                $"modificar la línea {linea} del albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarLineaAlbaranCompra"/>.</summary>
+        public string BorrarLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, int linea)
+        {
+            return _sesion.Ejecutar(t => t.BorrarLineaAlbaranCompra(ejercicio, empresa, proveedor, numero, linea), _timeout,
+                $"borrar la línea {linea} del albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
+        }
     }
 }

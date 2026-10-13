@@ -81,7 +81,8 @@ namespace S50APIService.Api
         /// </summary>
         private static IEnumerable<string> ErroresDeAnotaciones(PropertyInfo campo, string texto)
         {
-            if (campo.GetCustomAttribute<RequiredAttribute>() != null && string.IsNullOrWhiteSpace(texto))
+            var obligatorio = campo.GetCustomAttribute<RequiredAttribute>();
+            if (obligatorio != null && (texto == null || !obligatorio.AllowEmptyStrings && string.IsNullOrWhiteSpace(texto)))
                 yield return $"The {campo.Name} field is required.";
 
             var longitud = campo.GetCustomAttribute<StringLengthAttribute>();

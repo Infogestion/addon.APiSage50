@@ -534,7 +534,7 @@ namespace S50APIService.Sage
             string motivo = CambiarRegularizacion(ejercicio, empresa, numero, abierto =>
             {
                 var documento = (StockAlbRegulari)abierto;
-                string noAdmitido = NoRegularizable(articulo, documento._Fecha);
+                string noAdmitido = SoloEnSage(articulo, documento._Fecha, "regularizarlo");
                 if (noAdmitido != null)
                     return noAdmitido;
 
@@ -573,7 +573,7 @@ namespace S50APIService.Sage
 
                 if (guardada._Articulo.Trim() != articulo)
                 {
-                    string noAdmitido = NoRegularizable(articulo, documento._Fecha);
+                    string noAdmitido = SoloEnSage(articulo, documento._Fecha, "regularizarlo");
                     if (noAdmitido != null)
                         return noAdmitido;
                     guardada._Articulo = articulo;
@@ -735,6 +735,135 @@ namespace S50APIService.Sage
             });
         }
 
+        /// <summary>
+        /// Añade una línea a un albarán de compra como al teclearla en Sage: le pone el precio y los descuentos de la
+        /// tarifa del proveedor y el IVA del artículo, suma sus unidades al stock del almacén del albarán y recalcula los
+        /// totales. Sin <paramref name="definicion"/> queda el nombre del artículo. Devuelve null y el número de la línea
+        /// en <paramref name="linea"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string AnadirLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string articulo, decimal unidades, string definicion,
+            out int linea)
+        {
+            int nueva = 0;
+            string motivo = CambiarAlbaranCompra(ejercicio, empresa, proveedor, numero, abierto =>
+            {
+                var documento = (ewDocCompraALBARAN)abierto;
+                string noAdmitido = SoloEnSage(articulo, documento._Cabecera._Fecha, "comprarlo");
+                if (noAdmitido != null)
+                    return noAdmitido;
+
+                var lineaNueva = documento._AddLinea(-1);
+                lineaNueva._Articulo = articulo;
+                lineaNueva._Unidades = unidades;
+                if (string.IsNullOrWhiteSpace(lineaNueva._Articulo) || lineaNueva._Unidades != unidades)
+                {
+                    lineaNueva._Delete(false);
+                    return "Sage no ha aceptado la línea.";
+                }
+                if (!string.IsNullOrWhiteSpace(definicion))
+                    lineaNueva._Definicion = definicion;
+                if (!documento._Save())
+                    return Motivo(documento);
+
+                nueva = lineaNueva._Linea;
+                return null;
+            });
+            linea = nueva;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia las unidades de una línea de un albarán de compra y, si se indican, su precio, sus dos descuentos y su
+        /// descripción, como al editarla en Sage, que ajusta el stock con la diferencia y recalcula el importe y los
+        /// totales. Devuelve null si se ha guardado y, si no, el motivo.
+        /// </summary>
+        public string ModificarLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, int linea, decimal unidades, decimal? precio,
+            decimal? dto1, decimal? dto2, string definicion)
+        {
+            return CambiarAlbaranCompra(ejercicio, empresa, proveedor, numero, abierto =>
+            {
+                var documento = (ewDocCompraALBARAN)abierto;
+                var guardada = documento._Lineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+
+                // Al cambiar las unidades Sage vuelve a poner el precio de la tarifa: el que no se indica se deja como estaba.
+                decimal precioAntes = guardada._Precio, dto1Antes = guardada._Dto1, dto2Antes = guardada._Dto2;
+                guardada._Unidades = unidades;
+                if (guardada._Unidades != unidades)
+                    return "Sage no ha aceptado las unidades.";
+                guardada._Precio = precio ?? precioAntes;
+                guardada._Dto1 = dto1 ?? dto1Antes;
+                guardada._Dto2 = dto2 ?? dto2Antes;
+                if (definicion != null)
+                    guardada._Definicion = definicion;
+
+                return documento._Save() ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Borra una línea de un albarán de compra como al borrarla en Sage, que quita sus unidades del stock y recalcula
+        /// los totales. La cabecera se queda aunque fuera la última línea. Devuelve null si se ha borrado y, si no, el
+        /// motivo.
+        /// </summary>
+        public string BorrarLineaAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, int linea)
+        {
+            return CambiarAlbaranCompra(ejercicio, empresa, proveedor, numero, abierto =>
+            {
+                var documento = (ewDocCompraALBARAN)abierto;
+                var guardada = documento._Lineas.FirstOrDefault(l => l._Linea == linea);
+                if (guardada == null)
+                    return "No se encontró la línea.";
+                if (guardada._UsaSeries || !string.IsNullOrWhiteSpace(guardada._Escandal))
+                    return LineaSoloEnSage;
+                if (!guardada._Delete(false))
+                    return Motivo(documento);
+
+                // Sage borra la cabecera al guardar un albarán sin líneas: si era la última, solo se guardan los totales.
+                bool guardado = documento._Documento_Vacio()
+                    ? (bool)typeof(ewDocCompraALBARAN).GetMethod("_Save_Capsalera", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(documento, new object[] { false })
+                    : documento._Save();
+                return guardado ? null : Motivo(documento);
+            });
+        }
+
+        /// <summary>
+        /// Abre el albarán de compra (ewDocCompraALBARAN), le hace el <paramref name="cambio"/> y lo descarga. Devuelve null
+        /// si el cambio se ha hecho; si no, el aviso que Sage habría mostrado en pantalla o, si no ha habido ninguno, el
+        /// motivo que da el propio cambio.
+        /// </summary>
+        private string CambiarAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, Func<object, string> cambio)
+        {
+            return EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = (ewDocCompraALBARAN)AbrirAlbaranCompra(empresa, proveedor, numero, out _);
+                    if (documento == null)
+                        return "No se encontró el albarán de compra.";
+                    try
+                    {
+                        if (documento._Solo_Lectura || !string.IsNullOrWhiteSpace(documento._Cabecera._Factura))
+                            return "El albarán de compra está facturado o es de solo lectura en Sage: no se ha cambiado.";
+
+                        string motivo = cambio(documento);
+                        return motivo == null ? null : avisos.Texto ?? motivo;
+                    }
+                    finally
+                    {
+                        documento._DescargarDatos();
+                    }
+                }
+            });
+        }
+
         /// <summary>La extensión que el addon FERRETERIATIA engancha a los albaranes de compra, y su clase de expedientes (tabla con_albacom).</summary>
         private const string ExtensionFerreteria = "sage.addons.FerreteriaTia.Negocio.Documentos.ExtAlbCompra";
         private const string ExpedientesFerreteria = "sage.addons.FerreteriaTia.Negocio.Clases.AddonDbCon_Albacom";
@@ -766,6 +895,8 @@ namespace S50APIService.Sage
             documento._Numero = numero;
             documento._Cabecera._Load(cabecera.Rows[0]);
             typeof(ewDocCompraALBARAN).GetMethod("_Condicion_Consulta", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(documento, null);
+            documento._Pie._Load(cabecera.Rows[0]);
+            documento._Otros_Procesos_Load_Clases_Derivadas(empresa, numero, proveedor);
             return documento;
         }
 
@@ -800,22 +931,23 @@ namespace S50APIService.Sage
         }
 
         /// <summary>
-        /// Por qué un artículo no se puede regularizar desde aquí, o null si se puede. Con series, tallas y colores, lotes o
-        /// escandallo, Sage abre una pantalla para pedir el detalle, y aquí no hay quien la conteste.
+        /// Por qué un artículo no se puede poner desde aquí en una línea de un documento, o null si se puede. Con series,
+        /// tallas y colores, lotes o escandallo, Sage abre una pantalla para pedir el detalle, y aquí no hay quien la
+        /// conteste. <paramref name="accion"/> es lo que hay que hacer en Sage con el artículo: "regularizarlo", "comprarlo".
         /// </summary>
-        private static string NoRegularizable(string articulo, DateTime? fecha)
+        private static string SoloEnSage(string articulo, DateTime? fecha, string accion)
         {
             var ficha = new Articulo(articulo, "", "");
             if (!ficha._Existe_Registro())
                 return "No se encontró el artículo.";
             if (ficha._UsaSeries)
-                return "El artículo trabaja con series: hay que regularizarlo en Sage.";
+                return $"El artículo trabaja con series: hay que {accion} en Sage.";
             if (Convert.ToBoolean(ficha._Campo("lcolor")))
-                return "El artículo trabaja con tallas y colores: hay que regularizarlo en Sage.";
+                return $"El artículo trabaja con tallas y colores: hay que {accion} en Sage.";
             if (ficha._Con_Lotes(fecha))
-                return "El artículo trabaja con lotes: hay que regularizarlo en Sage.";
+                return $"El artículo trabaja con lotes: hay que {accion} en Sage.";
             if (Convert.ToInt32(ficha._Campo("tipo_escan")) != 0)
-                return "El artículo es un escandallo: hay que regularizarlo en Sage.";
+                return $"El artículo es un escandallo: hay que {accion} en Sage.";
             return null;
         }
 
@@ -965,8 +1097,7 @@ namespace S50APIService.Sage
             catch (ErrorSqlException) { throw; }
             catch (Exception ex)
             {
-                var e = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
-                throw new InvalidOperationException(e.GetType().Name + ": " + e.Message);
+                var e = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;                throw new InvalidOperationException(e.GetType().Name + ": " + e.Message);
             }
         }
     }
