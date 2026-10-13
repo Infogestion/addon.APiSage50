@@ -1124,6 +1124,56 @@ namespace S50APIService.Sage
             typeof(ewDocVentaTPV).GetMethod("_Save_Capsalera", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(documento, null);
         }
 
+        /// <summary>
+        /// Crea una ubicación (<paramref name="nueva"/>) o cambia el nombre y la descripción de la que tiene ese código, con
+        /// el mantenimiento de ubicaciones del addon Nadilux SGA. Devuelve null si se ha guardado y, si no, el motivo.
+        /// </summary>
+        public string GuardarUbicacion(string codigo, string nombre, string descripcion, bool nueva)
+        {
+            return EnSage(() =>
+            {
+                using (var avisos = new AvisosDeSage())
+                {
+                    dynamic ubicacion = Activator.CreateInstance(TipoDeAddon(LibreriaSga, MantenimientoUbicaciones));
+                    if (nueva)
+                        ubicacion._New(codigo);
+                    ubicacion._Codigo = codigo;
+                    if (!nueva)
+                        ubicacion._Load();
+                    ubicacion._Nombre = nombre;
+                    ubicacion._Descripcion = descripcion;
+                    return ubicacion._Save() ? null : avisos.Texto ?? MotivoMantenimiento(ubicacion);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Borra una ubicación con el mantenimiento de ubicaciones del addon Nadilux SGA, que no deja borrar la que tiene
+        /// artículos. Devuelve null si se ha borrado y, si no, el motivo.
+        /// </summary>
+        public string BorrarUbicacion(string codigo)
+        {
+            return EnSage(() =>
+            {
+                using (var avisos = new AvisosDeSage())
+                {
+                    dynamic ubicacion = Activator.CreateInstance(TipoDeAddon(LibreriaSga, MantenimientoUbicaciones));
+                    ubicacion._Codigo = codigo;
+                    ubicacion._Load();
+                    return ubicacion._Delete() ? null : avisos.Texto ?? MotivoMantenimiento(ubicacion);
+                }
+            });
+        }
+
+        private const string LibreriaSga = "sage.addons.NadiluxSGA";
+        private const string MantenimientoUbicaciones = "sage.addons.NadiluxSGA.Negocio.Mantes.ubicaciones";
+
+        private static string MotivoMantenimiento(dynamic mantenimiento)
+        {
+            string motivo = Convert.ToString(mantenimiento._Error_Message);
+            return string.IsNullOrWhiteSpace(motivo) ? "Sage no ha guardado el registro." : motivo;
+        }
+
         /// <summary>La extensión que el addon FERRETERIATIA engancha a los albaranes de compra, y su clase de expedientes (tabla con_albacom).</summary>
         private const string ExtensionFerreteria = "sage.addons.FerreteriaTia.Negocio.Documentos.ExtAlbCompra";
         private const string ExpedientesFerreteria = "sage.addons.FerreteriaTia.Negocio.Clases.AddonDbCon_Albacom";

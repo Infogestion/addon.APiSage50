@@ -155,6 +155,18 @@ namespace S50APIService.Sage
                 $"borrar el albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
         }
 
+        /// <summary>Ver <see cref="TrabajadorSage.GuardarUbicacion"/>.</summary>
+        public string GuardarUbicacion(string codigo, string nombre, string descripcion, bool nueva)
+        {
+            return _sesion.Ejecutar(t => t.GuardarUbicacion(codigo, nombre, descripcion, nueva), _timeout, $"guardar la ubicación {codigo}");
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarUbicacion"/>.</summary>
+        public string BorrarUbicacion(string codigo)
+        {
+            return _sesion.Ejecutar(t => t.BorrarUbicacion(codigo), _timeout, $"borrar la ubicación {codigo}");
+        }
+
         /// <summary>Ver <see cref="TrabajadorSage.NuevoAlbaranVenta"/>.</summary>
         public string NuevoAlbaranVenta(string ejercicio, string empresa, string letra, string cliente, string almacen, string vendedor, string fpag, string operario,
             DateTime fecha, string observaciones, out string numero)

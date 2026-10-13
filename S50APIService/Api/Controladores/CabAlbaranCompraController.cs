@@ -63,14 +63,16 @@ namespace S50APIService.Api.Controladores
 
         /// <summary>
         /// Permite obtener todas las cabeceras de los Albaranes de compra con extensión comprendidos entre las fechas datefrom/dateto.
-        /// Máscara de datefrom/dateto = dd.mm.yyyy
+        /// Máscara de datefrom/dateto = dd.mm.yyyy. Incluye el día dateto entero y ninguno posterior (interface.s50c
+        /// devolvía también los albaranes del día siguiente).
         /// </summary>
         [HttpGet]
         [Route("ext/{business}/{datefrom:datetime}/{dateto:datetime}")]
         [ResponseType(typeof(List<AlbComComplete>))]
         public HttpResponseMessage GetExt(string year, DateTime datefrom, DateTime dateto, string business, [Obligatorio] string warehouse = null, bool enviarAPP = false)
         {
-            var result = CAlbcomService.SelectByBusiness(year, datefrom, dateto.AddDays(1).AddTicks(-1), business, warehouse);
+            DateTime finDelDia = dateto.Date.AddDays(1).AddMilliseconds(-3);
+            var result = CAlbcomService.SelectByBusiness(year, datefrom, finDelDia, business, warehouse);
             var result2 = CAlbcomExtService.Select();
             return Respuestas.Json(CAlbcomExtService.Completar(result, result2, enviarAPP, mismoProveedor: true));
         }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using S50APIService.Api;
@@ -22,39 +23,53 @@ namespace S50APIService.Servicios
             return Db.Lector.LeerEjercicio<Ubicaciones>(Contexto.AddonSga, "ubicaciones", new Filtro { ["CODIGO"] = code }).FirstOrDefault();
         }
 
-        /// <summary>Crea la ubicación con los valores tal cual llegan, como el INSERT de EF en interface.s50c.</summary>
+        /// <summary>
+        /// Crea la ubicación con el mantenimiento de ubicaciones del addon. Lanza el motivo si no se puede: ya existe, no
+        /// trae nombre o algún valor no cabe en su columna (Sage lo guardaría cortado).
+        /// </summary>
         public static void Add(Ubicaciones item)
         {
             Db.Lector.ComprobarEjercicio(Contexto.AddonSga);
-            Escribir("INSERT INTO {ubicaciones} ([CODIGO], [NOMBRE], [DESCRIPCION]) VALUES (@codigo, @nombre, @descripcion)",
-                new Dictionary<string, string>
-                {
-                    ["@codigo"] = item.Codigo,
-                    ["@nombre"] = item.Nombre,
-                    ["@descripcion"] = item.Descripcion,
-                });
+            ComprobarLongitudes(item);
+            if (SelectByCode(item.Codigo) != null)
+                throw new InvalidOperationException("Ya existe una ubicación con ese código.");
+
+            Guardar(item.Codigo.Trim(), item, nueva: true);
         }
 
-        /// <summary>Cambia el nombre y la descripción de la ubicación que tiene guardado ese código.</summary>
+        /// <summary>Cambia el nombre y la descripción de la ubicación que tiene guardado ese código, con el mantenimiento del addon.</summary>
         public static void Update(string codigo, Ubicaciones item)
         {
-            Escribir("UPDATE {ubicaciones} SET [NOMBRE] = @nombre, [DESCRIPCION] = @descripcion, [MODIFIED] = GETDATE() WHERE [CODIGO] = @codigo",
-                new Dictionary<string, string>
-                {
-                    ["@codigo"] = codigo,
-                    ["@nombre"] = item.Nombre,
-                    ["@descripcion"] = item.Descripcion,
-                });
+            ComprobarLongitudes(item);
+            Guardar(codigo, item, nueva: false);
         }
 
+        /// <summary>Borra la ubicación con el mantenimiento del addon, que no deja borrar la que tiene artículos.</summary>
         public static void Remove(string codigo)
         {
-            Escribir("DELETE FROM {ubicaciones} WHERE [CODIGO] = @codigo", new Dictionary<string, string> { ["@codigo"] = codigo });
+            string motivo = Contexto.Escritor.BorrarUbicacion(codigo);
+            if (motivo != null)
+                throw new InvalidOperationException(motivo);
+        }
+
+        private static void Guardar(string codigo, Ubicaciones item, bool nueva)
+        {
+            string motivo = Contexto.Escritor.GuardarUbicacion(codigo, item.Nombre, item.Descripcion, nueva);
+            if (motivo != null)
+                throw new InvalidOperationException(motivo);
+        }
+
+        private static void ComprobarLongitudes(Ubicaciones item)
+        {
+            if (item.Codigo.Trim().Length == 0 || item.Codigo.Trim().Length > 6)
+                throw new InvalidOperationException("El código de la ubicación tiene que tener entre 1 y 6 caracteres.");
+            if (item.Nombre.TrimEnd().Length > 50)
+                throw new InvalidOperationException("El nombre de la ubicación no puede tener más de 50 caracteres.");
         }
 
         /// <summary>
-        /// Escribe en la base de datos del addon por la capa de datos de Sage: el mantenimiento del addon no hace nada más al
-        /// guardar. Un valor que no cabe en su columna es un error de SQL Server, como con EF.
+        /// Escribe en la tabla de artículos por ubicación del addon por la capa de datos de Sage. Un valor que no cabe en su
+        /// columna es un error de SQL Server, como con EF.
         /// </summary>
         internal static void Escribir(string sql, Dictionary<string, string> parametros)
         {
