@@ -86,7 +86,9 @@ namespace S50APIService.Api
 
             var longitud = campo.GetCustomAttribute<StringLengthAttribute>();
             if (longitud != null && texto != null && (texto.Length < longitud.MinimumLength || texto.Length > longitud.MaximumLength))
-                yield return $"The field {campo.Name} must be a string with a minimum length of {longitud.MinimumLength} and a maximum length of {longitud.MaximumLength}.";
+                yield return longitud.MinimumLength == 0
+                    ? $"The field {campo.Name} must be a string with a maximum length of {longitud.MaximumLength}."
+                    : $"The field {campo.Name} must be a string with a minimum length of {longitud.MinimumLength} and a maximum length of {longitud.MaximumLength}.";
         }
     }
 }

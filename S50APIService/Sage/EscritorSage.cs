@@ -126,5 +126,33 @@ namespace S50APIService.Sage
             return _sesion.Ejecutar(t => t.BorrarRegularizacion(ejercicio, empresa, numero), _timeout,
                 $"borrar la regularización {ejercicio}/{empresa}/{numero}");
         }
+
+        /// <summary>Ver <see cref="TrabajadorSage.NuevoAlbaranCompra"/>.</summary>
+        public string NuevoAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string almacen, DateTime fecha, string observaciones, out string numeroNuevo)
+        {
+            string creado = null;
+            string motivo = _sesion.Ejecutar(t => t.NuevoAlbaranCompra(ejercicio, empresa, proveedor, numero, almacen, fecha, observaciones, out creado), _timeout,
+                $"crear un albarán de compra del proveedor {proveedor} en {ejercicio}/{empresa}");
+            numeroNuevo = creado;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.ModificarAlbaranCompra"/>.</summary>
+        public string ModificarAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string almacen, DateTime? fecha, string operario,
+            string observaciones, out bool sinLineas)
+        {
+            bool vacio = false;
+            string motivo = _sesion.Ejecutar(t => t.ModificarAlbaranCompra(ejercicio, empresa, proveedor, numero, almacen, fecha, operario, observaciones, out vacio), _timeout,
+                $"modificar el albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
+            sinLineas = vacio;
+            return motivo;
+        }
+
+        /// <summary>Ver <see cref="TrabajadorSage.BorrarAlbaranCompra"/>.</summary>
+        public string BorrarAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero)
+        {
+            return _sesion.Ejecutar(t => t.BorrarAlbaranCompra(ejercicio, empresa, proveedor, numero), _timeout,
+                $"borrar el albarán de compra {ejercicio}/{empresa}/{proveedor}/{numero}");
+        }
     }
 }

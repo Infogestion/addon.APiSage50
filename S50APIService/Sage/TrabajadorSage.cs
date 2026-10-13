@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using sage._50;
 using sage.ew.articulo;
 using sage.ew.db;
+using sage.ew.docscompra;
 using sage.ew.docventatpv;
 using sage.ew.global;
 using sage.ew.serie;
@@ -615,6 +616,157 @@ namespace S50APIService.Sage
                 var documento = (StockAlbRegulari)abierto;
                 return documento._Delete() ? null : Motivo(documento);
             });
+        }
+
+        /// <summary>
+        /// Crea la cabecera de un albarán de compra como al darlo de alta en Sage, que le pone la forma de pago y los giros
+        /// del proveedor. Sin <paramref name="numero"/>, Sage le da el siguiente del contador del proveedor. Devuelve null y
+        /// el número en <paramref name="numeroNuevo"/> o, si no se puede, el motivo.
+        /// </summary>
+        public string NuevoAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string almacen, DateTime fecha, string observaciones, out string numeroNuevo)
+        {
+            string creado = null;
+            string motivo = EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = new ewDocCompraALBARAN { _MostrarMensajes = true };
+                    if (!documento._New(empresa, numero, proveedor))
+                        return avisos.Texto ?? Motivo(documento);
+
+                    // Las observaciones van primero: Sage guarda la cabecera al cambiarle la fecha o el almacén.
+                    documento._Cabecera._Observacio = observaciones;
+                    documento._Cabecera._Fecha = fecha;
+                    documento._Cabecera._Almacen = almacen;
+                    creado = documento._Numero;
+                    documento._DescargarDatos();
+                    return null;
+                }
+            });
+            numeroNuevo = creado;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Cambia las observaciones de un albarán de compra que tiene líneas y, si se indica, su operario, como al editarlo
+        /// en Sage. El almacén y la fecha, si se indican, tienen que ser los que ya tiene: cambiarlos movería el stock de
+        /// sus líneas. Sage solo carga los albaranes que tienen líneas: si no tiene ninguna no cambia nada y lo dice en
+        /// <paramref name="sinLineas"/>. Devuelve null si se ha guardado y, si no, el motivo.
+        /// </summary>
+        public string ModificarAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero, string almacen, DateTime? fecha, string operario,
+            string observaciones, out bool sinLineas)
+        {
+            bool vacio = false;
+            string motivo = EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = (ewDocCompraALBARAN)AbrirAlbaranCompra(empresa, proveedor, numero, out vacio);
+                    if (documento == null)
+                        return "No se encontró el albarán de compra.";
+                    if (vacio)
+                        return null;
+                    try
+                    {
+                        if (documento._Solo_Lectura || !string.IsNullOrWhiteSpace(documento._Cabecera._Factura))
+                            return "El albarán de compra está facturado o es de solo lectura en Sage: no se ha cambiado.";
+                        if (almacen != null && documento._Cabecera._Almacen.Trim() != almacen.Trim())
+                            return "No se puede cambiar el almacén de un albarán de compra que tiene líneas.";
+                        if (fecha != null && documento._Cabecera._Fecha.Date != fecha.Value.Date)
+                            return "No se puede cambiar la fecha de un albarán de compra que tiene líneas.";
+
+                        if (operario != null)
+                            documento._Cabecera._Operario = operario;
+                        documento._Cabecera._Observacio = observaciones;
+                        return documento._Save() ? null : avisos.Texto ?? Motivo(documento);
+                    }
+                    finally
+                    {
+                        documento._DescargarDatos();
+                    }
+                }
+            });
+            sinLineas = vacio;
+            return motivo;
+        }
+
+        /// <summary>
+        /// Borra un albarán de compra como el botón de borrar de Sage, con sus mismas comprobaciones (facturado, traspasado,
+        /// series vendidas): quita cada línea devolviendo sus unidades al stock y al pedido, y después la cabecera con sus
+        /// giros y portes. Devuelve null si se ha borrado y, si no, el motivo.
+        /// </summary>
+        public string BorrarAlbaranCompra(string ejercicio, string empresa, string proveedor, string numero)
+        {
+            return EnSage(() =>
+            {
+                string fuera = FueraDeLaSesion(ejercicio, empresa);
+                if (fuera != null)
+                    return fuera;
+
+                using (var avisos = new AvisosDeSage())
+                {
+                    var documento = (ewDocCompraALBARAN)AbrirAlbaranCompra(empresa, proveedor, numero, out bool sinLineas);
+                    if (documento == null)
+                        return "No se encontró el albarán de compra.";
+
+                    // La extensión del addon FERRETERIATIA pregunta en una ventana antes de borrar: se quita y su parte se hace abajo.
+                    var deFerreteria = documento._Addons.FirstOrDefault(a => a.Value.GetType().FullName == ExtensionFerreteria);
+                    if (deFerreteria.Key != null)
+                        documento._Addons.Remove(deFerreteria.Key);
+
+                    bool borrado = sinLineas
+                        ? documento._Borrar_Capsalera()
+                        : documento._Comprobaciones_Antes_Delete_Documento(false) && documento._Delete();
+                    if (!borrado)
+                        return avisos.Texto ?? Motivo(documento);
+
+                    deFerreteria.Value?.GetType().Assembly.GetType(ExpedientesFerreteria, true).GetMethod("Delete")
+                        .Invoke(null, new object[] { numero.Trim().PadLeft(10), empresa, proveedor, ejercicio });
+                    return null;
+                }
+            });
+        }
+
+        /// <summary>La extensión que el addon FERRETERIATIA engancha a los albaranes de compra, y su clase de expedientes (tabla con_albacom).</summary>
+        private const string ExtensionFerreteria = "sage.addons.FerreteriaTia.Negocio.Documentos.ExtAlbCompra";
+        private const string ExpedientesFerreteria = "sage.addons.FerreteriaTia.Negocio.Clases.AddonDbCon_Albacom";
+
+        /// <summary>
+        /// El albarán de compra cargado en la clase de Sage (ewDocCompraALBARAN), o null si no existe. Sage solo carga los
+        /// albaranes que tienen líneas: a uno que aún no tiene ninguna se le da la cabecera leída de su tabla, y se avisa
+        /// en <paramref name="sinLineas"/>.
+        /// Devuelve object porque las clases de Sage no pueden aparecer en la firma de ningún método de esta clase.
+        /// </summary>
+        private static object AbrirAlbaranCompra(string empresa, string proveedor, string numero, out bool sinLineas)
+        {
+            numero = numero.Trim().PadLeft(10);
+            var documento = new ewDocCompraALBARAN { _MostrarMensajes = true };
+            sinLineas = !documento._Load(empresa, numero, proveedor);
+            if (!sinLineas)
+                return documento;
+
+            var cabecera = new DataTable();
+            string sql = "SELECT c.*, c.IMPORTE AS importecab, c.ASI AS asicab, c.GUID_ID AS guid_idcab, c.CREATED AS createdcab, c.MODIFIED AS modifiedcab FROM "
+                + DB.SQLDatabase("GESTION", "C_ALBCOM") + " c WHERE c.EMPRESA = " + DB.SQLString(empresa) + " AND c.PROVEEDOR = " + DB.SQLString(proveedor)
+                + " AND c.NUMERO = " + DB.SQLString(numero);
+            if (!DB.SQLExec(sql, ref cabecera))
+                throw new ErrorSqlException(MensajeError(), sql);
+            if (cabecera.Rows.Count == 0)
+                return null;
+
+            documento._Empresa = empresa;
+            documento._Numero = numero;
+            documento._Cabecera._Load(cabecera.Rows[0]);
+            typeof(ewDocCompraALBARAN).GetMethod("_Condicion_Consulta", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(documento, null);
+            return documento;
         }
 
         private const string LineaSoloEnSage = "La línea es de un artículo con series o de un escandallo: hay que cambiarla en Sage.";
