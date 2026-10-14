@@ -8,6 +8,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <RootNamespace>S50APIService</RootNamespace>
+    <Version>1.0.0</Version>
     <!-- Swagger toma los textos de los comentarios /// <summary> de los controladores. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
