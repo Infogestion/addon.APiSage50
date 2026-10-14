@@ -430,7 +430,7 @@ namespace S50APIService.Sage
                             lineaNueva._Delete();
                             return avisos.Texto ?? "Sage no ha aceptado la línea.";
                         }
-                        if (!documento._Save())
+                        if (!GuardarTraspaso(documento))
                             return avisos.Texto ?? Motivo(documento);
 
                         var traspasoDeSeries = new SerieDocStockTraspaso();
@@ -546,7 +546,7 @@ namespace S50APIService.Sage
                     lineaNueva._Delete();
                     return "Sage no ha aceptado la línea.";
                 }
-                if (!documento._Save())
+                if (!GuardarRegularizacion(documento))
                     return Motivo(documento);
 
                 nueva = lineaNueva._Linea;
@@ -582,7 +582,7 @@ namespace S50APIService.Sage
                 if (guardada._Articulo.Trim() != articulo || guardada._Unidades != unidades)
                     return "Sage no ha aceptado el cambio.";
 
-                return documento._Save() ? null : Motivo(documento);
+                return GuardarRegularizacion(documento) ? null : Motivo(documento);
             });
         }
 
@@ -1238,6 +1238,209 @@ namespace S50APIService.Sage
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// Guarda el albarán de regularización con Sage. Sage escribe en la columna SERIE de cada línea "C-" + el código del
+        /// artículo al crearla y el código al cambiarla, y si no cabe SQL Server rechaza la línea: esas líneas se escriben
+        /// aquí con el mismo SQL que Sage pero con SERIE recortada, y el stock lo sigue moviendo la línea de Sage.
+        /// </summary>
+        private static bool GuardarRegularizacion(StockAlbRegulari documento)
+        {
+            int largoSerie = LargoColumna(documento._TablaDatos, "SERIE");
+            foreach (var linea in documento._DocumentLineas.Where(l => NoCabe(l.IsDirty, l._Linea, l._Articulo, largoSerie)).ToList())
+                GuardarLineaRegularizacion(documento, linea, largoSerie);
+
+            return documento._Save();
+        }
+
+        /// <summary>Como <see cref="GuardarRegularizacion"/>, para los albaranes de traspaso.</summary>
+        private static bool GuardarTraspaso(StockAlbTraspaso documento)
+        {
+            int largoSerie = LargoColumna(documento._TablaDatos, "SERIE");
+            foreach (var linea in documento._DocumentLineas.Where(l => NoCabe(l.IsDirty, l._Linea, l._Articulo, largoSerie)).ToList())
+                GuardarLineaTraspaso(documento, linea, largoSerie);
+
+            return documento._Save();
+        }
+
+        /// <summary>Si una línea por guardar de un documento de stock lleva un artículo cuyo "C-" + código no cabe en <paramref name="largoSerie"/>.</summary>
+        private static bool NoCabe(bool porGuardar, int linea, string articulo, int largoSerie)
+        {
+            return porGuardar && linea != 0 && ("C-" + (articulo ?? "").TrimEnd()).Length > largoSerie;
+        }
+
+        /// <summary>
+        /// Lo que hace el _Save de una línea de regularización de Sage (StockAlbRegulari.ArticuloStockAlbRegulari), con la
+        /// columna SERIE recortada a <paramref name="largoSerie"/>: el INSERT o el UPDATE de la línea y el movimiento de stock.
+        /// </summary>
+        private static void GuardarLineaRegularizacion(StockAlbRegulari documento, StockAlbRegulari.ArticuloStockAlbRegulari linea, int largoSerie)
+        {
+            var actualizarStocks = MetodoDeSage(linea, "ActualizarStocks");
+            var camposGuardados = new[] { CampoDeSage(documento, "_dFecha"), CampoDeSage(documento, "_cAlmacen") }
+                .Concat(CamposDeLinea(linea))
+                .ToList();
+
+            string tabla = DB.SQLDatabase("GESTION", documento._TablaDatos);
+            string sql = "IF EXISTS (SELECT EMPRESA FROM " + tabla + DeLaLinea + ")"
+                + " UPDATE " + tabla + " SET ARTICULO = @articulo, SERIE = LEFT(@articulo, @largo), UNIDADES = @unidades, COSTE = @coste,"
+                + " CAJAS = @cajas, PESO = @peso, TALLA = @talla, COLOR = @color, TIPO = @tipo, ESCANDAL = @escandal, VALORA = @valora,"
+                + " ASI = @asi, MODIFIED = GETDATE()" + DeLaLinea
+                + " ELSE INSERT INTO " + tabla + " (USUARIO, EMPRESA, NUMERO, ARTICULO, SERIE, UNIDADES, LINIA, COSTE, TALLA, COLOR, PESO,"
+                + " CAJAS, TIPO, ESCANDAL, VALORA, ASI) VALUES (@usuario, @empresa, @numero, @articulo, LEFT('C-' + @articulo, @largo),"
+                + " @unidades, @linia, @coste, @talla, @color, @peso, @cajas, @tipo, @escandal, @valora, @asi)";
+            var valores = new Dictionary<string, object>
+            {
+                ["@usuario"] = CampoDeSage(documento, "_lcUsuario"),
+                ["@empresa"] = documento._Empresa,
+                ["@numero"] = documento._Numero,
+                ["@linia"] = linea._Linea,
+                ["@articulo"] = linea._Articulo,
+                ["@largo"] = largoSerie,
+                ["@unidades"] = linea._Unidades,
+                ["@coste"] = linea._Coste,
+                ["@cajas"] = linea._Cajas,
+                ["@peso"] = linea._Peso,
+                ["@talla"] = linea._Talla,
+                ["@color"] = linea._Color,
+                ["@tipo"] = linea._Tipo,
+                ["@escandal"] = linea._Escandal,
+                ["@valora"] = linea._Valoracion,
+                ["@asi"] = linea._Asi,
+            };
+            GuardarLineaConSql(linea, sql, valores, () =>
+            {
+                actualizarStocks.Invoke(linea, null);
+                foreach (dynamic campo in camposGuardados)
+                    campo._Update();
+            });
+        }
+
+        /// <summary>
+        /// Lo que hace el _Save de una línea de traspaso de Sage (StockAlbTraspaso.ArticuloStockAlbTraspaso), con la columna
+        /// SERIE recortada a <paramref name="largoSerie"/>: el INSERT o el UPDATE de la línea y, si han cambiado las unidades
+        /// o el coste, el movimiento de stock en los almacenes de origen y de destino.
+        /// </summary>
+        private static void GuardarLineaTraspaso(StockAlbTraspaso documento, StockAlbTraspaso.ArticuloStockAlbTraspaso linea, int largoSerie)
+        {
+            var actualizarStocks = MetodoDeSage(linea, "ActualizarStocks");
+            dynamic stockDestino = CampoDeSage(linea, "_oUpdateStockDestino");
+            dynamic unidades = CampoDeSage(linea, "_nUnidades");
+            dynamic coste = CampoDeSage(linea, "_nCoste");
+            dynamic articulo = CampoDeSage(linea, "_cArticulo");
+            var camposGuardados = new[] { CampoDeSage(documento, "_dFecha"), CampoDeSage(documento, "_cAlmacenOrigen"), CampoDeSage(documento, "_cAlmacenDestino") }
+                .Concat(CamposDeLinea(linea))
+                .ToList();
+
+            string tabla = DB.SQLDatabase("GESTION", documento._TablaDatos);
+            string sql = "IF EXISTS (SELECT EMPRESA FROM " + tabla + DeLaLinea + ")"
+                + " UPDATE " + tabla + " SET ARTICULO = @articulo, SERIE = LEFT(@articulo, @largo), NOMBRE = @articulo, UNIDADES = @unidades,"
+                + " PMCOM = @coste, CAJAS = @cajas, PESO = @peso, TALLA = @talla, COLOR = @color, TIPO = @tipo, ESCANDAL = @escandal,"
+                + " VALORA = @valora, MODIFIED = GETDATE()" + DeLaLinea
+                + " ELSE INSERT INTO " + tabla + " (USUARIO, EMPRESA, NUMERO, ARTICULO, SERIE, NOMBRE, UNIDADES, LINIA, PMCOM, TALLA, COLOR,"
+                + " PESO, CAJAS, TIPO, ESCANDAL, VALORA) VALUES (@usuario, @empresa, @numero, @articulo, LEFT('C-' + @articulo, @largo),"
+                + " @nombre, @unidades, @linia, @coste, @talla, @color, @peso, @cajas, @tipo, @escandal, @valora)";
+            var valores = new Dictionary<string, object>
+            {
+                ["@usuario"] = CampoDeSage(documento, "_lcUsuario"),
+                ["@empresa"] = documento._Empresa,
+                ["@numero"] = documento._Numero,
+                ["@linia"] = linea._Linea,
+                ["@articulo"] = linea._Articulo,
+                ["@largo"] = largoSerie,
+                ["@nombre"] = linea._NombreArticulo,
+                ["@unidades"] = linea._Unidades,
+                ["@coste"] = linea._Coste,
+                ["@cajas"] = linea._Cajas,
+                ["@peso"] = linea._Peso,
+                ["@talla"] = linea._Talla,
+                ["@color"] = linea._Color,
+                ["@tipo"] = linea._Tipo,
+                ["@escandal"] = linea._Escandal,
+                ["@valora"] = linea._Valoracion,
+            };
+            GuardarLineaConSql(linea, sql, valores, () =>
+            {
+                bool tieneArticulo = !string.IsNullOrWhiteSpace(linea._Articulo);
+                bool serieNueva = tieneArticulo && linea._UsaSeries && articulo._Changed() && linea._Unidades == 1m;
+                if (!(tieneArticulo && (unidades._Changed() || coste._Changed())) && !serieNueva)
+                    return;
+
+                actualizarStocks.Invoke(linea, null);
+                if (!string.IsNullOrWhiteSpace(Convert.ToString(stockDestino._Articulo._OldVal)) || !string.IsNullOrWhiteSpace(Convert.ToString(stockDestino._Articulo._NewVal)))
+                    stockDestino._Update();
+                foreach (dynamic campo in camposGuardados)
+                    campo._Update();
+            });
+        }
+
+        /// <summary>El WHERE con el que Sage identifica una línea de un documento de stock.</summary>
+        private const string DeLaLinea = " WHERE EMPRESA = @empresa AND NUMERO = @numero AND LINIA = @linia";
+
+        /// <summary>Los campos de una línea de stock de Sage que su _Save da por guardados después de mover el stock.</summary>
+        private static List<object> CamposDeLinea(object linea)
+        {
+            return new[] { "_cArticulo", "_cTalla", "_cColor", "_nUnidades", "_nCajas", "_nPeso" }.Select(c => CampoDeSage(linea, c)).ToList();
+        }
+
+        /// <summary>
+        /// Escribe una línea de un documento de stock de Sage con <paramref name="sql"/> y hace después lo que su _Save tras el
+        /// INSERT o el UPDATE (<paramref name="despues"/>, el movimiento de stock), con la línea en modo guardando como en Sage.
+        /// Al final la marca como guardada (SaveMemento) para que el _Save del documento no la vuelva a escribir. Los miembros
+        /// de Sage que no son públicos se buscan antes de escribir: si una versión de Sage los cambia, falla sin tocar la base.
+        /// </summary>
+        private static void GuardarLineaConSql(object linea, string sql, Dictionary<string, object> valores, Action despues)
+        {
+            var guardarMemento = MetodoDeSage(linea, "SaveMemento");
+            var guardando = linea.GetType().GetProperty("IsSaving", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException($"Esta versión de Sage no tiene {linea.GetType().Name}.IsSaving.");
+            var parametros = valores
+                .Select(v => new DB.QueryParams(v.Key, Convert.ToString(v.Value ?? "", CultureInfo.InvariantCulture), SqlDbType.VarChar))
+                .ToList();
+
+            guardando.SetValue(linea, true);
+            try
+            {
+                if (!DB.SQLExecParams(sql, out int _, parametros))
+                    throw new ErrorSqlException(MensajeError(), sql);
+
+                despues();
+                guardarMemento.Invoke(linea, null);
+            }
+            finally
+            {
+                guardando.SetValue(linea, false);
+            }
+        }
+
+        /// <summary>Cuántos caracteres caben en una columna de una tabla del ejercicio.</summary>
+        private static int LargoColumna(string tabla, string columna)
+        {
+            var datos = new DataTable();
+            var parametros = new List<DB.QueryParams>
+            {
+                new DB.QueryParams("@tabla", DB.SQLDatabase("GESTION", tabla), SqlDbType.VarChar),
+                new DB.QueryParams("@columna", columna, SqlDbType.VarChar),
+            };
+            const string sql = "SELECT COL_LENGTH(@tabla, @columna)";
+            if (!DB.SQLExecParams(sql, ref datos, parametros) || datos.Rows.Count == 0 || datos.Rows[0][0] == DBNull.Value)
+                throw new ErrorSqlException(MensajeError(), sql);
+            return Convert.ToInt32(datos.Rows[0][0]);
+        }
+
+        /// <summary>Un método no público de un objeto de Sage; si no existe, la versión de Sage no es la esperada.</summary>
+        private static MethodInfo MetodoDeSage(object objeto, string nombre)
+        {
+            return objeto.GetType().GetMethod(nombre, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null)
+                ?? throw new InvalidOperationException($"Esta versión de Sage no tiene {objeto.GetType().Name}.{nombre}.");
+        }
+
+        /// <summary>El valor de un campo no público de un objeto de Sage; si no existe, la versión de Sage no es la esperada.</summary>
+        private static object CampoDeSage(object objeto, string nombre)
+        {
+            var campo = objeto.GetType().GetField(nombre, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException($"Esta versión de Sage no tiene {objeto.GetType().Name}.{nombre}.");
+            return campo.GetValue(objeto);
         }
 
         /// <summary>

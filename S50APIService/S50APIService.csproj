@@ -18,10 +18,11 @@
     -->
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <!--
-      Librerías de Sage contra las que se compila. En ejecución se usan las del terminal configurado en App.config.
-      Se puede cambiar al compilar: dotnet build -p:SageLibs="C:\ruta\a\las\librerias"
+      Librerías de Sage contra las que se compila: las de la versión más reciente del terminal (Sage borra las antiguas
+      al actualizarse). En ejecución se usan las del terminal configurado en App.config.
+      Se puede cambiar al compilar: dotnet build -p:SageTerminal="C:\ruta\al\terminal" o -p:SageLibs="C:\ruta\a\las\librerias"
     -->
-    <SageLibs Condition="'$(SageLibs)' == ''">D:\Sage50Tias\Sage50Term2\2026.3.20</SageLibs>
+    <SageTerminal Condition="'$(SageTerminal)' == ''">D:\Sage50Tias\Sage50Term2</SageTerminal>
     <!--
       Se compila contra una copia de solo sage.50.exe y sage.ew.db.dll. Si se referenciaran en la carpeta de Sage, MSBuild
       analizaría también las dependencias de esa carpeta (con otras versiones de System.Text.Json, etc.) y generaría mal
@@ -65,7 +66,19 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="CopiarReferenciasSage" BeforeTargets="ResolveAssemblyReferences">
+  <Target Name="BuscarSageLibs" Condition="'$(SageLibs)' == ''">
+    <ItemGroup>
+      <CarpetaSage Include="$([System.IO.Directory]::GetDirectories('$(SageTerminal)'))" Condition="Exists('$(SageTerminal)')" />
+      <VersionSage Include="%(CarpetaSage.Filename)%(CarpetaSage.Extension)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(CarpetaSage.Filename)%(CarpetaSage.Extension)', '^\d+(\.\d+)+$'))" />
+    </ItemGroup>
+    <PropertyGroup>
+      <UltimaVersionSage Condition="'$(UltimaVersionSage)' == '' Or $([MSBuild]::VersionGreaterThan('%(VersionSage.Identity)', '$(UltimaVersionSage)'))">%(VersionSage.Identity)</UltimaVersionSage>
+      <SageLibs>$(SageTerminal)\$(UltimaVersionSage)</SageLibs>
+    </PropertyGroup>
+    <Error Condition="'$(UltimaVersionSage)' == ''" Text="No hay ninguna versión de Sage en $(SageTerminal)." />
+  </Target>
+
+  <Target Name="CopiarReferenciasSage" BeforeTargets="ResolveAssemblyReferences" DependsOnTargets="BuscarSageLibs">
     <Copy SourceFiles="$(SageLibs)\sage.50.exe;$(SageLibs)\sage.ew.db.dll" DestinationFolder="$(SageReferencias)" SkipUnchangedFiles="true" />
   </Target>
 
